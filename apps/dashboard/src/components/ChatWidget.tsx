@@ -75,13 +75,13 @@ export const ChatWidget: React.FC = () => {
   const [inputText, setInputText] = useState('');
   const [role, setRole] = useState<ChatRole>(() => {
     try {
-      return (localStorage.getItem('chat_role') as ChatRole) || 'interested_person';
+      return (sessionStorage.getItem('chat_role') as ChatRole) || 'interested_person';
     } catch { return 'interested_person'; }
   });
   const [isStreaming, setIsStreaming] = useState(false);
   const [sessionId, setSessionId] = useState(() => {
     try {
-      return localStorage.getItem(`chat_session_${role}`) || crypto.randomUUID();
+      return sessionStorage.getItem(`chat_session_${role}`) || crypto.randomUUID();
     } catch { return crypto.randomUUID(); }
   });
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
@@ -98,8 +98,8 @@ export const ChatWidget: React.FC = () => {
   // Persist sessionId when it changes
   useEffect(() => {
     try {
-      localStorage.setItem(`chat_session_${role}`, sessionId);
-      localStorage.setItem('chat_role', role);
+      sessionStorage.setItem(`chat_session_${role}`, sessionId);
+      sessionStorage.setItem('chat_role', role);
     } catch {}
   }, [sessionId, role]);
 
@@ -377,7 +377,7 @@ export const ChatWidget: React.FC = () => {
                     setRole(r.key);
                     setMessages([]);
                     // Restore or create session for the new role
-                    const stored = localStorage.getItem(`chat_session_${r.key}`);
+                    const stored = sessionStorage.getItem(`chat_session_${r.key}`);
                     setSessionId(stored || crypto.randomUUID());
                   }
                 }}
