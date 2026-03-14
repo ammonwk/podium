@@ -1,4 +1,5 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, Component } from 'react';
+import type { ErrorInfo, ReactNode } from 'react';
 import { THEME } from '@apm/shared';
 import { RADIUS, SHADOW, ANIMATION } from './styles/theme';
 import { useSSE } from './hooks/useSSE';
@@ -8,10 +9,74 @@ import { PropertyDetail } from './components/PropertyDetail';
 import { DemoControls } from './components/DemoControls';
 import { ProviderToggle } from './components/ProviderToggle';
 import { Stage } from './components/Stage';
-import { ActivityFeed } from './components/ActivityFeed';
 import { FinancialBar } from './components/FinancialBar';
 import { DrilldownModal } from './components/DrilldownModal';
 import type { DrilldownData } from './components/DrilldownModal';
+import { ChatWidget } from './components/ChatWidget';
+
+// ─── Error Boundary ─────────────────────────────────────────────────────────
+
+class ErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('Dashboard error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column' as const,
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100vh',
+          gap: '16px',
+          backgroundColor: THEME.bg.primary,
+          fontFamily: THEME.font.sans,
+        }}>
+          <div style={{ fontSize: '32px' }}>🏠</div>
+          <div style={{ fontSize: '18px', fontWeight: 700, color: THEME.text.accent }}>
+            Something went wrong
+          </div>
+          <div style={{ fontSize: '14px', color: THEME.text.muted, maxWidth: '400px', textAlign: 'center' as const }}>
+            {this.state.error?.message || 'An unexpected error occurred'}
+          </div>
+          <button
+            onClick={() => this.setState({ hasError: false, error: null })}
+            style={{
+              padding: '8px 20px',
+              borderRadius: RADIUS.full,
+              border: `1px solid ${THEME.bg.border}`,
+              backgroundColor: THEME.bg.card,
+              color: THEME.text.primary,
+              fontSize: '14px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontFamily: THEME.font.sans,
+            }}
+          >
+            Try Again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// ─── App ────────────────────────────────────────────────────────────────────
 
 const App: React.FC = () => {
   const state = useSSE();
@@ -36,15 +101,11 @@ const App: React.FC = () => {
     setDrilldown({ type: 'event', data: event });
   }, []);
 
-  const openActivityDrilldown = useCallback((activity: ActivityItem) => {
-    setDrilldown({ type: 'activity', data: activity });
-  }, []);
-
   const selectedProperty = selectedPropertyId
     ? state.properties.find(p => p.id === selectedPropertyId) || null
     : null;
 
-  // AI status text for the top nav
+  // AI status text
   const aiStatusText = state.isProcessing
     ? `Handling: ${state.events[state.activeEventIndex]?.name || 'event'}...`
     : state.demoPhase === 'self-managing'
@@ -54,70 +115,66 @@ const App: React.FC = () => {
     : 'Watching 3 properties';
 
   return (
-    <div style={styles.root}>
-      {/* ─── Top Navigation ───────────────────────────────────────────── */}
-      <div style={styles.topNav}>
-        <div style={styles.navLeft}>
-          <div style={styles.logoContainer}>
+    <ErrorBoundary>
+      <div style={styles.root}>
+        {/* ─── Top Navigation ─────────────────────────────────────────── */}
+        <div style={styles.topNav}>
+          <div style={styles.navLeft}>
             <span style={styles.logoIcon}>🏠</span>
             <span style={styles.logoText}>Homebase</span>
           </div>
-        </div>
 
-        <div style={styles.navCenter}>
-          <div style={styles.aiStatus}>
-            <div
-              style={{
-                ...styles.aiStatusDot,
-                backgroundColor: state.isProcessing
-                  ? THEME.accent.violet
-                  : state.demoPhase === 'self-managing'
-                  ? THEME.status.selfInitiated
-                  : THEME.status.normal,
-                animation: state.isProcessing
-                  ? 'breathe 2s ease-in-out infinite'
-                  : undefined,
-              }}
+          <div style={styles.navCenter}>
+            <div style={styles.aiStatus}>
+              <div
+                style={{
+                  ...styles.aiStatusDot,
+                  backgroundColor: state.isProcessing
+                    ? THEME.accent.violet
+                    : state.demoPhase === 'self-managing'
+                    ? THEME.status.selfInitiated
+                    : THEME.status.normal,
+                  animation: state.isProcessing
+                    ? 'breathe 2s ease-in-out infinite'
+                    : undefined,
+                }}
+              />
+              <span style={styles.aiStatusText}>{aiStatusText}</span>
+            </div>
+          </div>
+
+          <div style={styles.navRight}>
+            <ProviderToggle
+              providerConfig={state.providerConfig}
+              onSwitch={state.switchProvider}
             />
-            <span style={styles.aiStatusText}>{aiStatusText}</span>
+            <DemoControls
+              demoPhase={state.demoPhase}
+              demoEventIndex={state.demoEventIndex}
+              onRunDemo={state.runDemo}
+              onResetDemo={state.resetDemo}
+            />
           </div>
         </div>
 
-        <div style={styles.navRight}>
-          <ProviderToggle
-            providerConfig={state.providerConfig}
-            onSwitch={state.switchProvider}
-          />
-          <DemoControls
-            demoPhase={state.demoPhase}
-            demoEventIndex={state.demoEventIndex}
-            onRunDemo={state.runDemo}
-            onResetDemo={state.resetDemo}
-          />
-        </div>
-      </div>
-
-      {/* ─── Main Content ─────────────────────────────────────────────── */}
-      <div style={styles.mainContent}>
-        {selectedProperty ? (
-          /* Property Detail Drill-In */
-          <PropertyDetail
-            property={selectedProperty}
-            activities={state.activities}
-            onBack={closePropertyView}
-          />
-        ) : (
-          /* Village + Panels */
-          <>
-            {/* 3D Property Village */}
-            <PropertyVillage
-              properties={state.properties}
-              onPropertyClick={openPropertyView}
+        {/* ─── Main Content ───────────────────────────────────────────── */}
+        <div style={styles.mainContent}>
+          {selectedProperty ? (
+            <PropertyDetail
+              property={selectedProperty}
+              activities={state.activities}
+              onBack={closePropertyView}
             />
+          ) : (
+            <>
+              {/* Compact Property Strip */}
+              <PropertyVillage
+                properties={state.properties}
+                onPropertyClick={openPropertyView}
+              />
 
-            {/* Two-column layout: AI Panel + Activity Feed */}
-            <div style={styles.panelsContainer}>
-              <div style={styles.aiPanelWrapper}>
+              {/* Full-width AI Feed (center stage) */}
+              <div style={styles.aiFeedContainer}>
                 <Stage
                   events={state.events}
                   activeEventIndex={state.activeEventIndex}
@@ -128,37 +185,34 @@ const App: React.FC = () => {
                   onSelectEvent={state.selectEvent}
                 />
               </div>
-              <div style={styles.activityWrapper}>
-                <ActivityFeed
-                  activities={state.activities}
-                  onActivityClick={openActivityDrilldown}
-                />
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* ─── Bottom Bar ───────────────────────────────────────────────── */}
-      <FinancialBar financials={state.financials} />
-
-      {/* ─── Error Banner ─────────────────────────────────────────────── */}
-      {state.error && (
-        <div style={styles.errorBanner}>
-          <span style={styles.errorIcon}>⚠</span>
-          {state.error}
-          <button
-            style={styles.errorDismiss}
-            onClick={() => {/* Error auto-clears on reconnect */}}
-          >
-            ×
-          </button>
+            </>
+          )}
         </div>
-      )}
 
-      {/* ─── Drilldown Modal ──────────────────────────────────────────── */}
-      <DrilldownModal data={drilldown} onClose={closeDrilldown} />
-    </div>
+        {/* ─── Bottom Bar ─────────────────────────────────────────────── */}
+        <FinancialBar financials={state.financials} />
+
+        {/* ─── Error Banner ───────────────────────────────────────────── */}
+        {state.error && (
+          <div style={styles.errorBanner}>
+            <span>⚠</span>
+            {state.error}
+            <button
+              style={styles.errorDismiss}
+              onClick={() => {/* Error auto-clears on reconnect */}}
+            >
+              ×
+            </button>
+          </div>
+        )}
+
+        {/* ─── Drilldown Modal ────────────────────────────────────────── */}
+        <DrilldownModal data={drilldown} onClose={closeDrilldown} />
+
+        {/* ─── Chat Widget ──────────────────────────────────────────────── */}
+        <ChatWidget />
+      </div>
+    </ErrorBoundary>
   );
 };
 
@@ -178,7 +232,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '12px 24px',
+    padding: '10px 24px',
     flexShrink: 0,
     borderBottom: `1px solid ${THEME.bg.border}`,
     backgroundColor: THEME.bg.card,
@@ -188,18 +242,13 @@ const styles: Record<string, React.CSSProperties> = {
   navLeft: {
     display: 'flex',
     alignItems: 'center',
-    gap: '12px',
-  },
-  logoContainer: {
-    display: 'flex',
-    alignItems: 'center',
     gap: '8px',
   },
   logoIcon: {
-    fontSize: '24px',
+    fontSize: '22px',
   },
   logoText: {
-    fontSize: '20px',
+    fontSize: '18px',
     fontWeight: 800,
     color: THEME.text.accent,
     letterSpacing: '-0.03em',
@@ -213,7 +262,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
-    padding: '6px 16px',
+    padding: '5px 14px',
     borderRadius: '9999px',
     backgroundColor: THEME.bg.primary,
     border: `1px solid ${THEME.bg.border}`,
@@ -237,34 +286,20 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '12px',
   },
 
-  // Main content
+  // Main content — single column, centered
   mainContent: {
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
-    padding: '0 24px',
   },
 
-  // Panels below village
-  panelsContainer: {
+  // AI feed container — centered, full width
+  aiFeedContainer: {
     flex: 1,
     display: 'flex',
-    gap: '20px',
     overflow: 'hidden',
-    paddingBottom: '12px',
-    minHeight: 0,
-  },
-  aiPanelWrapper: {
-    flex: 2,
-    minWidth: 0,
-    display: 'flex',
-  },
-  activityWrapper: {
-    flex: 1,
-    minWidth: '300px',
-    maxWidth: '380px',
-    display: 'flex',
+    padding: '0 24px',
   },
 
   // Error
@@ -287,9 +322,6 @@ const styles: Record<string, React.CSSProperties> = {
     backdropFilter: 'blur(8px)',
     boxShadow: SHADOW.lg,
   },
-  errorIcon: {
-    fontSize: '16px',
-  },
   errorDismiss: {
     background: 'none',
     border: 'none',
@@ -298,7 +330,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '18px',
     padding: '0 0 0 8px',
     fontFamily: THEME.font.sans,
-    transition: 'opacity 0.15s ease',
   },
 };
 
