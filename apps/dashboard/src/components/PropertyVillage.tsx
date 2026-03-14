@@ -1,5 +1,5 @@
-import React, { useRef, useMemo, useCallback, useState } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import React, { useRef, useMemo, useCallback, useState, useEffect } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import type { ThreeEvent } from '@react-three/fiber';
 import { Html, ContactShadows, Float, Sparkles } from '@react-three/drei';
 import * as THREE from 'three';
@@ -56,6 +56,23 @@ function smoothstep(e0: number, e1: number, x: number): number {
   return t * t * (3 - 2 * t);
 }
 
+/* ─── Responsive sizing ───────────────────────────────────────────────── */
+function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
+
+function ResponsiveCamera() {
+  const { camera, size } = useThree();
+  useEffect(() => {
+    if (camera instanceof THREE.PerspectiveCamera) {
+      const tw = Math.max(0, Math.min(1, (size.width - 600) / 600));
+      const th = Math.max(0, Math.min(1, (size.height - 150) / 190));
+      const t = Math.min(tw, th);
+      camera.fov = lerp(42, 28, t);
+      camera.updateProjectionMatrix();
+    }
+  }, [camera, size.width, size.height]);
+  return null;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════ */
 /*  PropertyVillage                                                        */
 /* ═══════════════════════════════════════════════════════════════════════ */
@@ -78,7 +95,7 @@ export const PropertyVillage: React.FC<Props> = ({ properties, onPropertyClick, 
     ref={containerRef}
     style={{
       ...containerStyle,
-      height: '340px',
+      height: 'min(30vh, clamp(220px, 20vw + 100px, 340px))',
     }}
     onPointerEnter={() => {
       if (containerRef.current) canvasRect = containerRef.current.getBoundingClientRect();
@@ -99,6 +116,7 @@ export const PropertyVillage: React.FC<Props> = ({ properties, onPropertyClick, 
       }}
       style={{ background: 'transparent', overflow: 'visible' }}
     >
+      <ResponsiveCamera />
       <SceneContent properties={properties} onPropertyClick={onPropertyClick} />
     </Canvas>
   </div>
@@ -166,9 +184,9 @@ const LANDSCAPE: { type: 'pine' | 'round' | 'bush'; pos: [number, number, number
   { type: 'bush', pos: [-5.1, 0, 0.2], s: 0.35, c: '#7BBF80' },
   { type: 'pine', pos: [-1.6, 0, 1.0], s: 0.65, c: '#5A9A5E' },
   { type: 'pine', pos: [1.5, 0, 0.8], s: 0.5, c: '#4E8E52' },
-  { type: 'round', pos: [6.3, 0, -0.1], s: 0.7, c: '#6EAD72' },
-  { type: 'round', pos: [7.0, 0, 1.3], s: 0.5, c: '#82BD86' },
-  { type: 'bush', pos: [5.4, 0, 0.9], s: 0.3, c: '#7BBF80' },
+  { type: 'round', pos: [6.8, 0, 0.8], s: 0.7, c: '#6EAD72' },
+  { type: 'round', pos: [7.5, 0, 1.3], s: 0.5, c: '#82BD86' },
+  { type: 'bush', pos: [7.2, 0, 0.2], s: 0.3, c: '#7BBF80' },
 ];
 
 /* ═══════════════════════════════════════════════════════════════════════ */

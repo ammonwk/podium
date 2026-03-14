@@ -402,6 +402,21 @@ export const toolDefinitions: LLMToolDefinition[] = [
       },
     },
   },
+  {
+    name: 'send_payment_link',
+    description:
+      'Generate a Stripe payment link for an existing booking and return the URL. The guest can click it to pay for their stay. Returns the payment URL and total amount. Will not create a duplicate link if one already exists for the booking.',
+    input_schema: {
+      type: 'object',
+      required: ['booking_id'],
+      properties: {
+        booking_id: {
+          type: 'string',
+          description: 'Booking ID (e.g., BOOK_101) to generate a payment link for',
+        },
+      },
+    },
+  },
 ];
 
 export const ALL_TOOLS = toolDefinitions;
@@ -412,6 +427,7 @@ export const CHAT_BOOKING_TOOLS: LLMToolDefinition[] = toolDefinitions.filter((t
     TOOL_NAMES.EDIT_BOOKING,
     TOOL_NAMES.GET_PROPERTY_STATUS,
     TOOL_NAMES.LOOKUP_GUEST,
+    TOOL_NAMES.SEND_PAYMENT_LINK,
   ].includes(t.name as any),
 );
 

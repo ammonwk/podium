@@ -249,6 +249,10 @@ export const OperationsQueue: React.FC<Props> = ({
 }) => {
   const feedRef = useRef<HTMLDivElement>(null);
   const [expandedLaneId, setExpandedLaneId] = useState<string | null>(null);
+  const lastManualSelectRef = useRef<{ laneId: string; time: number } | null>(null);
+  const prevActiveLaneIdsRef = useRef<Set<string>>(new Set());
+  const expandedLaneIdRef = useRef<string | null>(null);
+  expandedLaneIdRef.current = expandedLaneId;
 
   useEffect(() => { injectKeyframes(); }, []);
 
@@ -275,8 +279,43 @@ export const OperationsQueue: React.FC<Props> = ({
   );
 
   const selectLane = useCallback((laneId: string) => {
-    setExpandedLaneId(prev => prev === laneId ? null : laneId);
+    setExpandedLaneId(prev => {
+      const next = prev === laneId ? null : laneId;
+      if (next) {
+        lastManualSelectRef.current = { laneId: next, time: Date.now() };
+      }
+      return next;
+    });
   }, []);
+
+  // Auto-open side panel when a new lane becomes active
+  useEffect(() => {
+    const currentActiveIds = new Set(activeLanes.map(l => l.id));
+    const prevActiveIds = prevActiveLaneIdsRef.current;
+
+    const newActiveLanes = activeLanes.filter(l => !prevActiveIds.has(l.id));
+    prevActiveLaneIdsRef.current = currentActiveIds;
+
+    if (newActiveLanes.length === 0) return;
+
+    // Pick the most recent new active lane (first in sorted order)
+    const newestLane = newActiveLanes[0];
+
+    // Don't interrupt if user manually selected a different lane within the last 60s
+    // and that lane's panel is still open
+    const manual = lastManualSelectRef.current;
+    if (manual) {
+      const stillViewing = expandedLaneIdRef.current === manual.laneId;
+      const withinCooldown = (Date.now() - manual.time) < 60_000;
+      const isDifferent = manual.laneId !== newestLane.id;
+
+      if (isDifferent && stillViewing && withinCooldown) {
+        return;
+      }
+    }
+
+    setExpandedLaneId(newestLane.id);
+  }, [activeLanes]);
 
   // Count badge
   const countParts: string[] = [];
@@ -813,7 +852,7 @@ const detailCloseStyle: React.CSSProperties = {
 };
 
 const headerStyle: React.CSSProperties = {
-  flexShrink: 0, padding: '10px 0',
+  flexShrink: 0, padding: 'clamp(4px, 1vh, 10px) 0',
 };
 
 const headerRowStyle: React.CSSProperties = {
@@ -839,7 +878,7 @@ const feedStyle: React.CSSProperties = {
 const emptyStateStyle: React.CSSProperties = {
   flex: 1, display: 'flex', flexDirection: 'column',
   alignItems: 'center', justifyContent: 'center',
-  gap: 8, padding: '60px 20px',
+  gap: 8, padding: 'clamp(20px, 5vh, 60px) 20px',
 };
 
 // ─── Shared card base ────────────────────────────────────────────────────────

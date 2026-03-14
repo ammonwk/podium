@@ -42,6 +42,8 @@ export interface Booking {
   check_in: string;
   check_out: string;
   status: 'active' | 'upcoming' | 'completed';
+  payment_status?: 'pending' | 'paid' | 'none';
+  payment_link?: string;
 }
 
 export interface ScheduleEvent {
@@ -189,6 +191,18 @@ export interface EscalateToOwnerResult {
   owner_name: string;
   timestamp: string;
   summary_sent: string;
+}
+
+export interface SendPaymentLinkInput {
+  booking_id: string;
+}
+
+export interface SendPaymentLinkResult {
+  booking_id: string;
+  payment_url: string;
+  amount_cents: number;
+  total_display: string;
+  status: string;
 }
 
 export interface ReportMaintenanceIssueInput {

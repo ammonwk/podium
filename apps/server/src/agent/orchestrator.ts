@@ -27,6 +27,7 @@ export async function runLoop(
   const MUTATING_TOOLS = new Set([
     'create_booking', 'edit_booking', 'create_work_order',
     'send_sms', 'adjust_price', 'report_maintenance_issue',
+    'send_payment_link',
   ]);
   const executedMutatingCalls = new Set<string>();
 

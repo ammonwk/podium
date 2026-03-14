@@ -84,6 +84,7 @@ const App: React.FC = () => {
   const [drilldown, setDrilldown] = useState<DrilldownData>(null);
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [demoNotesMinimized, setDemoNotesMinimized] = useState(false);
 
   const closeDrilldown = useCallback(() => setDrilldown(null), []);
 
@@ -130,7 +131,13 @@ const App: React.FC = () => {
       const t = getLastActionTime();
       if (t > 0) {
         const secs = (Date.now() - t) / 1000;
-        setLastActionAgo(secs < 60 ? `${secs.toFixed(1)}s` : `${Math.floor(secs / 60)}m ${Math.floor(secs % 60)}s`);
+        const mins = Math.floor(secs / 60);
+        const hrs = Math.floor(mins / 60);
+        setLastActionAgo(
+          secs < 60 ? `${secs.toFixed(1)}s`
+          : mins < 60 ? `${mins}m ${Math.floor(secs % 60)}s`
+          : `${hrs}h ${mins % 60}m`
+        );
       }
     };
     tick();
@@ -154,8 +161,7 @@ const App: React.FC = () => {
         {/* ─── Top Navigation ─────────────────────────────────────────── */}
         <div style={styles.topNav}>
           <div style={styles.navLeft}>
-            <span style={styles.logoIcon}>🏠</span>
-            <span style={styles.logoText}>Homebase</span>
+            <img src="/vibepm.png" alt="VibePM" style={styles.logoImg} />
           </div>
 
           <div style={styles.navCenter}>
@@ -259,6 +265,38 @@ const App: React.FC = () => {
 
         {/* ─── Chat Widget ──────────────────────────────────────────────── */}
         <ChatWidget />
+
+        {/* ─── Demo Notes Sticky ─────────────────────────────────────────── */}
+        <div style={{
+          ...styles.demoSticky,
+          ...(demoNotesMinimized ? { padding: '10px 14px', cursor: 'pointer' } : {}),
+        }} onClick={demoNotesMinimized ? () => setDemoNotesMinimized(false) : undefined}>
+          <div style={styles.demoStickyHeader}>
+            <div style={styles.demoStickyTitle}>Demo Notes</div>
+            <button
+              style={styles.demoStickyToggle}
+              onClick={(e) => { e.stopPropagation(); setDemoNotesMinimized(!demoNotesMinimized); }}
+              title={demoNotesMinimized ? 'Expand' : 'Minimize'}
+            >
+              {demoNotesMinimized ? '+' : '\u2013'}
+            </button>
+          </div>
+          {!demoNotesMinimized && (
+            <div style={styles.demoStickyBody}>
+              <p style={styles.demoStickyText}>
+                Text <span style={styles.demoStickyHighlight}>+1 (833) 987-4206</span> to book the AirBNB yourself!
+              </p>
+              <div style={styles.demoStickySpacer} />
+              <p style={styles.demoStickyText}>
+                When asked for payment, use a Stripe test card:
+              </p>
+              <p style={styles.demoStickyCard}>4242 4242 4242 4242</p>
+              <p style={styles.demoStickySmall}>
+                Any future exp date, any CVC, any ZIP
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </ErrorBoundary>
   );
@@ -280,7 +318,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '10px 24px',
+    padding: '10px clamp(8px, 2vw, 24px)',
     flexShrink: 0,
     borderBottom: `1px solid ${THEME.bg.border}`,
     backgroundColor: THEME.bg.card,
@@ -293,14 +331,10 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: '8px',
   },
-  logoIcon: {
-    fontSize: '22px',
-  },
-  logoText: {
-    fontSize: '18px',
-    fontWeight: 800,
-    color: THEME.text.accent,
-    letterSpacing: '-0.03em',
+  logoImg: {
+    height: '90px',
+    margin: '-25px 0',
+    objectFit: 'contain' as const,
   },
   navCenter: {
     position: 'absolute',
@@ -368,7 +402,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     minHeight: 0,
     overflow: 'hidden',
-    padding: '0 24px',
+    padding: '0 clamp(8px, 2vw, 24px)',
   },
 
   // Error
@@ -391,6 +425,84 @@ const styles: Record<string, React.CSSProperties> = {
     backdropFilter: 'blur(8px)',
     boxShadow: SHADOW.lg,
   },
+  // Demo sticky note
+  demoSticky: {
+    position: 'fixed',
+    bottom: '24px',
+    left: '24px',
+    width: '300px',
+    backgroundColor: '#fef9c3',
+    border: '1px solid #e5d78c',
+    borderRadius: '4px',
+    padding: '20px 22px 18px',
+    zIndex: 400,
+    boxShadow: '2px 3px 12px rgba(0,0,0,0.10)',
+    fontFamily: THEME.font.sans,
+    transform: 'rotate(-1.2deg)',
+  },
+  demoStickyHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  demoStickyTitle: {
+    fontSize: '18px',
+    fontWeight: 800,
+    color: '#92400e',
+    letterSpacing: '-0.3px',
+  },
+  demoStickyToggle: {
+    width: '24px',
+    height: '24px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'none',
+    border: '1px solid #d4a94a',
+    borderRadius: '4px',
+    color: '#92400e',
+    fontSize: '16px',
+    fontWeight: 800,
+    cursor: 'pointer',
+    lineHeight: 1,
+    flexShrink: 0,
+  },
+  demoStickyBody: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    marginTop: '12px',
+  },
+  demoStickyText: {
+    fontSize: '15px',
+    fontWeight: 500,
+    color: '#78350f',
+    lineHeight: 1.45,
+    margin: 0,
+  },
+  demoStickyHighlight: {
+    fontWeight: 800,
+    fontSize: '17px',
+    color: '#1d4ed8',
+    letterSpacing: '0.2px',
+  },
+  demoStickySpacer: {
+    height: '12px',
+  },
+  demoStickyCard: {
+    fontSize: '22px',
+    fontWeight: 800,
+    color: '#1e293b',
+    fontFamily: 'monospace',
+    letterSpacing: '1.5px',
+    margin: '6px 0 2px',
+  },
+  demoStickySmall: {
+    fontSize: '12px',
+    fontWeight: 500,
+    color: '#a16207',
+    margin: 0,
+  },
+
   errorDismiss: {
     display: 'flex',
     alignItems: 'center',

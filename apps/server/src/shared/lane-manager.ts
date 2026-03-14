@@ -13,6 +13,25 @@ export interface ConversationLane {
 
 export const DEMO_LANE_ID = 'demo';
 
+/**
+ * Remove trailing assistant messages with tool_use blocks that lack matching
+ * tool_result responses. This can happen when the server crashes mid-loop.
+ */
+function sanitizeHistory(history: LLMMessage[]): LLMMessage[] {
+  while (history.length > 0) {
+    const last = history[history.length - 1];
+    if (last.role !== 'assistant') break;
+    const blocks = Array.isArray(last.content) ? last.content : [];
+    const hasToolUse = blocks.some((b: any) => b.type === 'tool_use');
+    if (!hasToolUse) break;
+    // The next message (which doesn't exist since this is last) should be a
+    // user message with tool_result blocks. Since it's missing, drop this message.
+    console.warn('[LANE] Removing orphaned assistant tool_use message from history');
+    history.pop();
+  }
+  return history;
+}
+
 class LaneManager {
   private lanes = new Map<string, ConversationLane>();
 
@@ -90,10 +109,11 @@ class LaneManager {
     try {
       const docs = await ConversationModel.find().lean();
       for (const doc of docs) {
+        const history = sanitizeHistory(doc.history as LLMMessage[]);
         const lane: ConversationLane = {
           id: doc.lane_id,
           type: doc.lane_type,
-          history: doc.history as LLMMessage[],
+          history,
           queue: Promise.resolve(),
           queueDepth: 0,
         };

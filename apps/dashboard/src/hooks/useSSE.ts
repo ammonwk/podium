@@ -582,6 +582,16 @@ function applySSEEvent(
           });
           break;
         }
+
+        case "send_payment_link": {
+          const result = p.result as Record<string, unknown>;
+          // Only count revenue when a new link is created (not duplicates)
+          if (result.status === "link_created") {
+            const amountCents = (result.amount_cents as number) || 0;
+            newFinancials.revenue += amountCents / 100;
+          }
+          break;
+        }
       }
 
       return {
