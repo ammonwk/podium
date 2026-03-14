@@ -72,7 +72,6 @@ export async function executeSendSms(
                 phone_number: to,
               },
             },
-            from: surgePhoneNumber,
             body,
           }),
         },
