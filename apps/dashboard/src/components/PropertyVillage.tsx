@@ -95,7 +95,7 @@ export const PropertyVillage: React.FC<Props> = ({ properties, onPropertyClick, 
       gl={{ antialias: true, alpha: true }}
       onCreated={({ gl, camera }) => {
         gl.toneMapping = THREE.NoToneMapping;
-        camera.lookAt(0, 0.3, 0);
+        camera.lookAt(0, 0.0, 0);
       }}
       style={{ background: 'transparent', overflow: 'visible' }}
     >

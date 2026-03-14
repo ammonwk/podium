@@ -99,6 +99,16 @@ function formatElapsed(seconds: number): string {
   return `${mins}m ${secs}s`;
 }
 
+function formatTimestamp(ts?: string): string {
+  if (!ts) return '';
+  try {
+    const d = new Date(ts);
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  } catch {
+    return ts;
+  }
+}
+
 function generateSummary(toolCalls: ToolCallData[]): string {
   const parts: string[] = [];
   for (const tc of toolCalls) {
@@ -221,13 +231,8 @@ function deriveLanes(events: EventState[]): LaneState[] {
   lanes.sort((a, b) => {
     const order = { active: 0, queued: 1, done: 2 };
     if (order[a.status] !== order[b.status]) return order[a.status] - order[b.status];
-    if (a.status === 'active') {
-      return (b.startedAt || '').localeCompare(a.startedAt || '');
-    }
-    if (a.status === 'done') {
-      return (b.lastActivityAt || '').localeCompare(a.lastActivityAt || '');
-    }
-    return 0;
+    // Within each status group, most recent activity first
+    return (b.lastActivityAt || '').localeCompare(a.lastActivityAt || '');
   });
 
   return lanes;
@@ -244,7 +249,6 @@ export const OperationsQueue: React.FC<Props> = ({
 }) => {
   const feedRef = useRef<HTMLDivElement>(null);
   const [expandedLaneId, setExpandedLaneId] = useState<string | null>(null);
-  const [showAllDone, setShowAllDone] = useState(false);
 
   useEffect(() => { injectKeyframes(); }, []);
 
@@ -263,10 +267,6 @@ export const OperationsQueue: React.FC<Props> = ({
   const queuedLanes = useMemo(() => lanes.filter(l => l.status === 'queued'), [lanes]);
   const doneLanes = useMemo(() => lanes.filter(l => l.status === 'done'), [lanes]);
 
-  // Show all done if there are few, otherwise cap and let user expand
-  const DONE_CAP = 8;
-  const visibleDone = showAllDone ? doneLanes : doneLanes.slice(0, DONE_CAP);
-  const hiddenDoneCount = doneLanes.length - visibleDone.length;
   const hasActiveOrQueued = activeLanes.length > 0 || queuedLanes.length > 0;
 
   const pendingTasks = useMemo(
@@ -358,7 +358,7 @@ export const OperationsQueue: React.FC<Props> = ({
               {doneLanes.length > 0 && (
                 <>
                   {hasActiveOrQueued && <SectionDivider label={`completed (${doneLanes.length})`} />}
-                  {visibleDone.map((lane, idx) => (
+                  {doneLanes.map((lane, idx) => (
                     <DoneLaneRow
                       key={lane.id}
                       lane={lane}
@@ -369,32 +369,25 @@ export const OperationsQueue: React.FC<Props> = ({
                       onEventClick={onEventClick}
                     />
                   ))}
-                  {hiddenDoneCount > 0 && (
-                    <button
-                      onClick={() => setShowAllDone(prev => !prev)}
-                      style={showMoreStyle}
-                    >
-                      {showAllDone ? 'Show less' : `Show ${hiddenDoneCount} more`}
-                    </button>
-                  )}
                 </>
               )}
 
-              {/* Upcoming Tasks */}
-              {pendingTasks.length > 0 && (
-                <>
-                  <SectionDivider label="upcoming" />
-                  {pendingTasks.map(task => (
-                    <div key={task.task_id} style={taskRowStyle}>
-                      <span style={taskDescStyle}>{task.description}</span>
-                      <span style={taskTimeStyle}>{getCountdown(task.fires_at)}</span>
-                    </div>
-                  ))}
-                </>
-              )}
             </>
           )}
         </div>
+
+        {/* Upcoming Tasks — sticky bottom */}
+        {pendingTasks.length > 0 && (
+          <div style={upcomingStickyStyle}>
+            <SectionDivider label="upcoming" />
+            {pendingTasks.map(task => (
+              <div key={task.task_id} style={taskRowStyle}>
+                <span style={taskDescStyle}>{task.description}</span>
+                <span style={taskTimeStyle}>{getCountdown(task.fires_at)}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Right: Detail Panel (always rendered, width transitions) */}
@@ -574,56 +567,107 @@ const ExpandedDetail: React.FC<{
   isActive: boolean;
   onToolCardClick: (toolCall: ToolCallData) => void;
 }> = ({ lane, isActive, onToolCardClick }) => {
-  const summary = generateSummary(lane.allToolCalls);
+  // Build a unified conversation timeline
+  type TimelineItem =
+    | { kind: 'inbound_sms'; from: string; body: string; ts: number }
+    | { kind: 'outbound_sms'; to: string; body: string; status: string; timestamp: string; tc: ToolCallData; idx: number }
+    | { kind: 'tool'; tc: ToolCallData; idx: number }
+    | { kind: 'reasoning' };
+
+  const items: TimelineItem[] = [];
+
+  // 1. Incoming SMS trigger is always first
+  if (lane.triggerPreview) {
+    items.push({ kind: 'inbound_sms', from: lane.triggerFrom || 'Guest', body: lane.triggerPreview, ts: 0 });
+  }
+
+  // 2. Reasoning (if active and has thinking text)
+  if (lane.currentEvent?.thinkingText) {
+    items.push({ kind: 'reasoning' });
+  }
+
+  // 3. Tool calls in order, splitting SMS out as chat bubbles
+  lane.allToolCalls.forEach((tc, i) => {
+    if (tc.tool_name === 'send_sms') {
+      const input = tc.input as Record<string, unknown>;
+      const result = tc.result as Record<string, unknown>;
+      items.push({
+        kind: 'outbound_sms',
+        to: (result.recipient_name as string) || (input.to as string) || 'Guest',
+        body: (input.body as string) || '',
+        status: (result.status as string) || 'queued',
+        timestamp: (result.timestamp as string) || '',
+        tc,
+        idx: i,
+      });
+    } else {
+      items.push({ kind: 'tool', tc, idx: i });
+    }
+  });
 
   return (
     <div style={expandedStyle} onClick={(e) => e.stopPropagation()}>
-      {/* Trigger message */}
-      {lane.triggerPreview && (
-        <div style={triggerBubbleStyle}>
-          <span style={{ fontSize: 13, flexShrink: 0, color: TOOL_COLORS.send_sms || '#3B82F6', fontWeight: 700 }}>
-            SMS
-          </span>
-          <div style={{ minWidth: 0 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: THEME.text.secondary, fontFamily: THEME.font.sans }}>
-              {lane.triggerFrom || 'Guest'}:
-            </span>
-            <span style={{ fontSize: 14, color: THEME.text.primary, fontFamily: THEME.font.sans, lineHeight: '1.5', marginLeft: 4 }}>
-              &ldquo;{lane.triggerPreview}&rdquo;
-            </span>
-          </div>
-        </div>
-      )}
+      <div style={conversationStyle}>
+        {items.map((item, i) => {
+          switch (item.kind) {
+            case 'inbound_sms':
+              return (
+                <div key={`in-${i}`} style={inboundRowStyle}>
+                  <div style={inboundBubbleStyle}>
+                    <div style={inboundSenderStyle}>{item.from}</div>
+                    <div style={inboundBodyStyle}>{item.body}</div>
+                  </div>
+                </div>
+              );
 
-      {/* Reasoning */}
-      {lane.currentEvent?.thinkingText && (
-        <ReasoningExpander text={lane.currentEvent.thinkingText} isStreaming={isActive} />
-      )}
+            case 'reasoning':
+              return (
+                <div key={`reason-${i}`} style={{ margin: '4px 0' }}>
+                  <ReasoningExpander text={lane.currentEvent!.thinkingText} isStreaming={isActive} />
+                </div>
+              );
 
-      {/* Tool cards */}
-      {lane.allToolCalls.length > 0 && (
-        <div style={toolCardsStyle}>
-          {lane.allToolCalls.map((tc, i) => (
-            <ToolCard
-              key={tc.id}
-              toolCall={tc}
-              index={i}
-              onClick={() => onToolCardClick(tc)}
-            />
-          ))}
-        </div>
-      )}
+            case 'tool':
+              return (
+                <div key={item.tc.id} style={eventCardRowStyle}>
+                  <ToolCard
+                    toolCall={item.tc}
+                    index={item.idx}
+                    onClick={() => onToolCardClick(item.tc)}
+                  />
+                </div>
+              );
 
-      {/* Summary */}
-      {summary && (
-        <div style={{
-          fontSize: 13, color: THEME.text.secondary, fontFamily: THEME.font.sans,
-          lineHeight: '1.5', marginTop: 10, paddingTop: 8,
-          borderTop: `1px solid ${THEME.bg.border}`,
-        }}>
-          {summary}
-        </div>
-      )}
+            case 'outbound_sms':
+              return (
+                <div key={item.tc.id} style={outboundRowStyle}>
+                  <div style={outboundRecipientStyle}>To {item.to}</div>
+                  <div style={outboundBubbleStyle}>
+                    {item.body}
+                  </div>
+                  <div style={outboundMetaStyle}>
+                    <span style={{
+                      color: item.status === 'delivered' ? THEME.status.normal
+                           : item.status === 'queued' ? THEME.text.muted
+                           : THEME.status.emergency,
+                      fontWeight: 500,
+                    }}>
+                      {item.status === 'delivered' ? '✓ Delivered' : item.status === 'queued' ? '● Queued' : '✗ Failed'}
+                    </span>
+                    {item.timestamp && (
+                      <span style={{ color: THEME.text.muted, fontFamily: THEME.font.mono }}>
+                        {formatTimestamp(item.timestamp)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+
+            default:
+              return null;
+          }
+        })}
+      </div>
     </div>
   );
 };
@@ -938,17 +982,53 @@ const thinkingDotStyle: React.CSSProperties = {
 const expandedStyle: React.CSSProperties = {
 };
 
-const triggerBubbleStyle: React.CSSProperties = {
-  display: 'flex', alignItems: 'flex-start', gap: 8,
-  backgroundColor: THEME.bg.primary,
-  border: `1px solid ${THEME.bg.border}`,
-  borderRadius: '12px 12px 12px 4px',
-  padding: '10px 14px', maxWidth: '85%',
+const conversationStyle: React.CSSProperties = {
+  display: 'flex', flexDirection: 'column', gap: 10,
 };
 
-const toolCardsStyle: React.CSSProperties = {
-  display: 'flex', flexDirection: 'column', gap: 8,
-  marginTop: 10,
+// Inbound SMS (left-aligned, like received iMessage)
+const inboundRowStyle: React.CSSProperties = {
+  display: 'flex', justifyContent: 'flex-start',
+};
+const inboundBubbleStyle: React.CSSProperties = {
+  backgroundColor: THEME.bg.primary,
+  border: `1px solid ${THEME.bg.border}`,
+  borderRadius: '4px 14px 14px 14px',
+  padding: '10px 14px', maxWidth: '85%',
+};
+const inboundSenderStyle: React.CSSProperties = {
+  fontSize: 12, fontWeight: 700, color: THEME.text.secondary,
+  fontFamily: THEME.font.sans, marginBottom: 3,
+};
+const inboundBodyStyle: React.CSSProperties = {
+  fontSize: 15, color: THEME.text.primary,
+  fontFamily: THEME.font.sans, lineHeight: '1.5',
+};
+
+// Outbound SMS (right-aligned, like sent iMessage)
+const outboundRowStyle: React.CSSProperties = {
+  display: 'flex', flexDirection: 'column', alignItems: 'flex-end',
+};
+const outboundRecipientStyle: React.CSSProperties = {
+  fontSize: 12, fontWeight: 600, color: THEME.text.muted,
+  fontFamily: THEME.font.sans, marginBottom: 3, marginRight: 4,
+};
+const outboundBubbleStyle: React.CSSProperties = {
+  backgroundColor: 'rgba(59, 130, 246, 0.08)',
+  border: '1px solid rgba(59, 130, 246, 0.12)',
+  borderRadius: '14px 14px 4px 14px',
+  padding: '10px 14px', maxWidth: '85%',
+  fontSize: 15, color: THEME.text.primary,
+  fontFamily: THEME.font.sans, lineHeight: '1.5',
+};
+const outboundMetaStyle: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 8,
+  fontSize: 13, marginTop: 4, marginRight: 4,
+};
+
+// Tool call event cards (full width, inline between messages)
+const eventCardRowStyle: React.CSSProperties = {
+  margin: '2px 0',
 };
 
 // ─── Reasoning ───────────────────────────────────────────────────────────────
@@ -995,15 +1075,11 @@ const dividerLabelStyle: React.CSSProperties = {
   fontFamily: THEME.font.sans,
 };
 
-// ─── Show more button ────────────────────────────────────────────────────────
-
-const showMoreStyle: React.CSSProperties = {
-  background: 'none', border: `1px solid ${THEME.bg.border}`,
-  borderRadius: RADIUS.md, padding: '5px 16px',
-  fontSize: 12, fontWeight: 600, color: THEME.text.muted,
-  cursor: 'pointer', fontFamily: THEME.font.sans,
-  textAlign: 'center' as const, width: '100%',
-  transition: `background-color ${ANIMATION.fast}`,
+const upcomingStickyStyle: React.CSSProperties = {
+  flexShrink: 0,
+  display: 'flex', flexDirection: 'column', gap: 4,
+  paddingTop: 4,
+  borderTop: `1px solid ${THEME.bg.border}`,
 };
 
 // ─── Task rows ───────────────────────────────────────────────────────────────

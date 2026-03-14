@@ -1,4 +1,4 @@
-import React, { useState, useCallback, Component } from 'react';
+import React, { useState, useCallback, useEffect, Component } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
 import { SettingsModal } from './components/SettingsModal';
 import { THEME } from '@apm/shared';
@@ -110,12 +110,40 @@ const App: React.FC = () => {
   // AI status text — now lane-aware
   const activeCount = state.events.filter(e => e.status === 'active').length;
   const doneCount = state.events.filter(e => e.status === 'done').length;
+
+  // Track time since last action for self-managing phase
+  const [lastActionAgo, setLastActionAgo] = useState('');
+  useEffect(() => {
+    if (state.demoPhase !== 'self-managing' || state.isProcessing) return;
+    const getLastActionTime = () => {
+      let latest = 0;
+      for (const ev of state.events) {
+        if (ev.completedAt) latest = Math.max(latest, new Date(ev.completedAt).getTime());
+        if (ev.startedAt) latest = Math.max(latest, new Date(ev.startedAt).getTime());
+        for (const tc of ev.toolCalls) {
+          if (tc.timestamp) latest = Math.max(latest, new Date(tc.timestamp).getTime());
+        }
+      }
+      return latest;
+    };
+    const tick = () => {
+      const t = getLastActionTime();
+      if (t > 0) {
+        const secs = (Date.now() - t) / 1000;
+        setLastActionAgo(secs < 60 ? `${secs.toFixed(1)}s` : `${Math.floor(secs / 60)}m ${Math.floor(secs % 60)}s`);
+      }
+    };
+    tick();
+    const id = setInterval(tick, 100);
+    return () => clearInterval(id);
+  }, [state.demoPhase, state.isProcessing, state.events]);
+
   const aiStatusText = state.isProcessing
     ? activeCount > 1
       ? `Handling ${activeCount} conversations...`
       : `Handling: ${state.events[state.activeEventIndex]?.name || 'event'}...`
     : state.demoPhase === 'self-managing'
-    ? 'AI is self-managing your properties'
+    ? lastActionAgo ? `Last action ${lastActionAgo} ago` : 'AI active'
     : state.events.length > 0
     ? `${doneCount} conversation${doneCount !== 1 ? 's' : ''} handled`
     : 'Watching 3 properties';
