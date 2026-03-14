@@ -11,8 +11,13 @@ import { executeEditBooking } from './edit-booking.js';
 import { executeGetPropertyStatus } from './get-property-status.js';
 import { executeLookupGuest } from './lookup-guest.js';
 import { executeQueryDatabase } from './query-database.js';
+import { executeReportMaintenanceIssue } from './report-maintenance-issue.js';
 
-type ToolExecutor = (input: Record<string, unknown>) => Promise<Record<string, unknown>>;
+type ToolExecutor = (input: Record<string, unknown>, context?: ToolContext) => Promise<Record<string, unknown>>;
+
+export interface ToolContext {
+  sessionId?: string;
+}
 
 const registry: Record<string, ToolExecutor> = {
   [TOOL_NAMES.SEND_SMS]: (input) =>
@@ -39,15 +44,18 @@ const registry: Record<string, ToolExecutor> = {
     executeLookupGuest(input as any) as unknown as Promise<Record<string, unknown>>,
   [TOOL_NAMES.QUERY_DATABASE]: (input) =>
     executeQueryDatabase(input as any) as unknown as Promise<Record<string, unknown>>,
+  [TOOL_NAMES.REPORT_MAINTENANCE_ISSUE]: (input, context) =>
+    executeReportMaintenanceIssue(input as any, context?.sessionId) as unknown as Promise<Record<string, unknown>>,
 };
 
 export async function executeTool(
   name: string,
   input: Record<string, unknown>,
+  context?: ToolContext,
 ): Promise<Record<string, unknown>> {
   const executor = registry[name];
   if (!executor) {
     throw new Error(`Unknown tool: ${name}`);
   }
-  return executor(input);
+  return executor(input, context);
 }

@@ -349,6 +349,35 @@ export const toolDefinitions: LLMToolDefinition[] = [
       },
     },
   },
+  {
+    name: 'report_maintenance_issue',
+    description:
+      'Report a maintenance issue at a property on behalf of a guest. Creates a work order and automatically finds and dispatches the best available vendor. Returns a pending status immediately — the vendor matching happens in the background and the guest will be updated via chat.',
+    input_schema: {
+      type: 'object',
+      required: ['property_id', 'issue_description', 'category', 'severity'],
+      properties: {
+        property_id: {
+          type: 'string',
+          description: 'Property ID (e.g., PROP_001)',
+        },
+        issue_description: {
+          type: 'string',
+          description: 'Detailed description of the maintenance issue as reported by the guest',
+        },
+        category: {
+          type: 'string',
+          enum: ['plumbing', 'electrical', 'hvac', 'cleaning', 'general'],
+          description: 'Category of the maintenance issue',
+        },
+        severity: {
+          type: 'string',
+          enum: ['low', 'medium', 'high', 'emergency'],
+          description: 'Severity level: low (cosmetic), medium (comfort), high (significant impact), emergency (safety/water/fire)',
+        },
+      },
+    },
+  },
 ];
 
 export const ALL_TOOLS = toolDefinitions;
@@ -364,6 +393,10 @@ export const CHAT_BOOKING_TOOLS: LLMToolDefinition[] = toolDefinitions.filter((t
 
 export const CHAT_OWNER_TOOLS: LLMToolDefinition[] = toolDefinitions.filter((t) =>
   [TOOL_NAMES.QUERY_DATABASE].includes(t.name as any),
+);
+
+export const CHAT_OCCUPANT_TOOLS: LLMToolDefinition[] = toolDefinitions.filter((t) =>
+  [TOOL_NAMES.REPORT_MAINTENANCE_ISSUE, TOOL_NAMES.LOOKUP_GUEST].includes(t.name as any),
 );
 
 export const NO_TOOLS: LLMToolDefinition[] = [];

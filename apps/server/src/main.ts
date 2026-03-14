@@ -35,7 +35,7 @@ import { laneManager, DEMO_LANE_ID } from './shared/lane-manager.js';
 import type { ConversationType } from './shared/lane-manager.js';
 import { getOwnerSettings, setOwnerSettings, loadOwnerSettings, initOwnerSettings } from './shared/owner-settings.js';
 import { buildSystemPrompt } from './agent/system-prompt.js';
-import { ALL_TOOLS, CHAT_BOOKING_TOOLS, CHAT_OWNER_TOOLS, NO_TOOLS } from './tools/definitions.js';
+import { ALL_TOOLS, CHAT_BOOKING_TOOLS, CHAT_OWNER_TOOLS, CHAT_OCCUPANT_TOOLS, NO_TOOLS } from './tools/definitions.js';
 import { normalizePhone } from './shared/phone-utils.js';
 import { executeCreateBooking } from './tools/create-booking.js';
 import { BookingModel, PropertyModel, ScheduleEventModel } from './shared/db.js';
@@ -403,7 +403,9 @@ app.post('/chat', async (req, res) => {
     ? CHAT_BOOKING_TOOLS
     : role === 'property_owner'
       ? CHAT_OWNER_TOOLS
-      : NO_TOOLS;
+      : role === 'current_occupant'
+        ? CHAT_OCCUPANT_TOOLS
+        : NO_TOOLS;
 
   // Use a mutable reference to the history array so runLoop can push to it
   const history = session.history as import('@apm/shared').LLMMessage[];
@@ -415,6 +417,7 @@ app.post('/chat', async (req, res) => {
     tools,
     systemPrompt: buildSystemPrompt(role, normalizedPhone || session.phone_number),
     emitter: createChatEmitter(sessionId),
+    sessionId,
   }).then(async () => {
     // After loop completes, persist updated history and add assistant message
     const assistantBlocks = history.filter(m => m.role === 'assistant');
