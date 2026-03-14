@@ -359,6 +359,8 @@ export interface EventQueuedPayload {
   event_name: string;
   source: 'human' | 'system' | 'self-scheduled';
   position: number;
+  trigger_from?: string;
+  trigger_body?: string;
 }
 
 export interface ErrorPayload {
