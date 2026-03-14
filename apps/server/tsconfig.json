@@ -7,8 +7,5 @@
     "moduleResolution": "bundler",
     "noEmit": true
   },
-  "include": ["src/**/*"],
-  "references": [
-    { "path": "../../packages/shared" }
-  ]
+  "include": ["src/**/*"]
 }
