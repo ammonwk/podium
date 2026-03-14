@@ -33,10 +33,12 @@ import { addChatClient, clearAllChatClients } from './shared/chat-sse.js';
 import { setHandleEventCallback } from './tools/schedule-task.js';
 import { laneManager, DEMO_LANE_ID } from './shared/lane-manager.js';
 import type { ConversationType } from './shared/lane-manager.js';
-import { getOwnerSettings, setOwnerSettings, loadOwnerSettings } from './shared/owner-settings.js';
+import { getOwnerSettings, setOwnerSettings, loadOwnerSettings, initOwnerSettings } from './shared/owner-settings.js';
 import { buildSystemPrompt } from './agent/system-prompt.js';
-import { ALL_TOOLS, CHAT_BOOKING_TOOLS, NO_TOOLS } from './tools/definitions.js';
+import { ALL_TOOLS, CHAT_BOOKING_TOOLS, CHAT_OWNER_TOOLS, CHAT_OCCUPANT_TOOLS, NO_TOOLS } from './tools/definitions.js';
 import { normalizePhone } from './shared/phone-utils.js';
+import { executeCreateBooking } from './tools/create-booking.js';
+import { BookingModel, PropertyModel, ScheduleEventModel } from './shared/db.js';
 
 // ─── Express App ──────────────────────────────────────────────────────────────
 
@@ -397,7 +399,13 @@ app.post('/chat', async (req, res) => {
 
   // Run unified loop in background (streaming via SSE)
   const normalizedPhone = session.phone_number ? normalizePhone(session.phone_number) : undefined;
-  const tools = role === 'interested_person' ? CHAT_BOOKING_TOOLS : NO_TOOLS;
+  const tools = role === 'interested_person'
+    ? CHAT_BOOKING_TOOLS
+    : role === 'property_owner'
+      ? CHAT_OWNER_TOOLS
+      : role === 'current_occupant'
+        ? CHAT_OCCUPANT_TOOLS
+        : NO_TOOLS;
 
   // Use a mutable reference to the history array so runLoop can push to it
   const history = session.history as import('@apm/shared').LLMMessage[];
@@ -409,6 +417,7 @@ app.post('/chat', async (req, res) => {
     tools,
     systemPrompt: buildSystemPrompt(role, normalizedPhone || session.phone_number),
     emitter: createChatEmitter(sessionId),
+    sessionId,
   }).then(async () => {
     // After loop completes, persist updated history and add assistant message
     const assistantBlocks = history.filter(m => m.role === 'assistant');
@@ -500,12 +509,12 @@ app.post('/reset', async (_req, res) => {
 });
 
 // GET /settings/owner
-app.get('/settings/owner', (_req, res) => {
-  res.json(getOwnerSettings());
+app.get('/settings/owner', async (_req, res) => {
+  res.json(await getOwnerSettings());
 });
 
 // PUT /settings/owner
-app.put('/settings/owner', (req, res) => {
+app.put('/settings/owner', async (req, res) => {
   const { name, phone } = req.body || {};
 
   if (!name || !phone) {
@@ -518,8 +527,57 @@ app.put('/settings/owner', (req, res) => {
     return;
   }
 
-  setOwnerSettings(name, phone);
-  res.json({ status: 'ok', ...getOwnerSettings() });
+  await setOwnerSettings(name, phone);
+  res.json({ status: 'ok', ...(await getOwnerSettings()) });
+});
+
+// ─── Booking CRUD ────────────────────────────────────────────────────────────
+
+// GET /properties — list all properties (for dropdown)
+app.get('/properties', async (_req, res) => {
+  const properties = await PropertyModel.find({}).lean();
+  res.json(properties);
+});
+
+// GET /bookings — list all bookings
+app.get('/bookings', async (_req, res) => {
+  const bookings = await BookingModel.find({}).lean();
+  res.json(bookings);
+});
+
+// POST /bookings — create a booking
+app.post('/bookings', async (req, res) => {
+  try {
+    const { property_id, guest_name, guest_phone, check_in, check_out } = req.body || {};
+    if (!property_id || !guest_name || !guest_phone || !check_in || !check_out) {
+      res.status(400).json({ error: 'Missing required fields' });
+      return;
+    }
+    const result = await executeCreateBooking({ property_id, guest_name, guest_phone, check_in, check_out });
+    res.json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Failed to create booking' });
+  }
+});
+
+// DELETE /bookings/:id — delete a booking and its schedule events
+app.delete('/bookings/:id', async (req, res) => {
+  try {
+    const booking = await BookingModel.findOne({ id: req.params.id }).lean();
+    if (!booking) {
+      res.status(404).json({ error: 'Booking not found' });
+      return;
+    }
+    // Remove associated schedule events (checkin/checkout for this guest on this property)
+    await ScheduleEventModel.deleteMany({
+      property_id: booking.property_id,
+      notes: { $regex: booking.guest_name },
+    });
+    await BookingModel.deleteOne({ id: req.params.id });
+    res.json({ status: 'deleted', id: req.params.id });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to delete booking' });
+  }
 });
 
 // GET /health

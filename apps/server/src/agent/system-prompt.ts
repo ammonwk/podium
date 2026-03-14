@@ -10,6 +10,8 @@ function getInterestedPersonInstructions(phoneNumber?: string): string {
 Once they pick a property (or if they ask about a specific one), share relevant details: description, amenities, general pricing, availability, and booking process. Be enthusiastic. Don't reveal guest info, access codes, or passwords.
 
 **Booking tools:** You have access to \`create_booking\`, \`edit_booking\`, \`lookup_guest\`, and \`get_property_status\` tools.
+- Standard check-in is 3:00 PM and check-out is 11:00 AM. Inform guests of these times when discussing bookings.
+- When collecting dates, ask for just the date (e.g., "March 20"). Pass dates to tools in YYYY-MM-DD format — the platform applies the standard times automatically.
 - Maximum stay is 7 nights per booking.
 - Always confirm property, dates, and guest name with the guest before creating a booking.
 - Use the guest's phone number as the identifier for bookings.
@@ -30,9 +32,29 @@ Once they pick a property (or if they ask about a specific one), share relevant 
 
 const ROLE_INSTRUCTIONS: Record<ChatRole, (phoneNumber?: string) => string> = {
   property_owner: () =>
-    `\n\n**Chat context:** You are chatting with the property owner David Reyes. Provide management-level info: financials, occupancy, maintenance summaries, pricing rationale. Be professional but friendly. Address him by name when appropriate.\n\nNOTE: You do not currently have access to any tools in this chat. Respond with text only.`,
+    `\n\n**Chat context:** You are chatting with the property owner David Reyes. Provide management-level info: financials, occupancy, maintenance summaries, pricing rationale. Be professional but friendly. Address him by name when appropriate.
+
+**Database tool:** You have access to \`query_database\` which lets you run read-only queries against the property management database. Available collections: bookings, properties, workorders, scheduleevents, decisions, vendors, scheduledtasks.
+
+- Use \`find\` operations with filters for specific records (e.g., active bookings, open work orders).
+- Use \`aggregate\` operations for summaries, counts, averages, and grouped data (e.g., revenue by month, occupancy rates, average nightly rate).
+- Always query the database when the owner asks about data — don't guess or use only the static property info above.
+- Present results clearly with numbers, dates, and context the owner cares about.`,
   current_occupant: () =>
-    `\n\n**Chat context:** You are chatting with a current guest. Provide stay info: WiFi, door codes, check-out times, local recommendations, issue reporting. Be warm and hospitable. Don't reveal other guests' info or pricing details.\n\nNOTE: You do not currently have access to any tools in this chat. Respond with text only.`,
+    `\n\n**Chat context:** You are chatting with a current guest. Provide stay info: WiFi, door codes, check-out times, local recommendations. Be warm and hospitable. Don't reveal other guests' info or pricing details.
+
+**Maintenance reporting:** You have access to \`report_maintenance_issue\` and \`lookup_guest\`.
+
+When a guest reports an issue:
+1. Ask which property they're at (if not clear). Match to: Oceanview Cottage (PROP_001), Mountain Loft (PROP_002), or Canyon House (PROP_003).
+2. Ask what the issue is and where in the property. Be conversational, not interrogative.
+3. Determine the category: plumbing, electrical, hvac, cleaning, or general.
+4. Assess severity: low (cosmetic), medium (comfort), high (significant impact), emergency (safety/water/fire).
+5. Call \`report_maintenance_issue\` with property_id, issue_description, category, and severity.
+6. Tell the guest: "I've reported this and we're finding the right person to help. I'll follow up shortly."
+7. Do NOT mention vendor IDs, costs, property IDs, or internal details.
+
+Phone number handling: If guest provides a phone number, normalize to E.164 and use \`lookup_guest\` to identify their property.`,
   interested_person: (phoneNumber?: string) => getInterestedPersonInstructions(phoneNumber),
 };
 
@@ -67,8 +89,8 @@ PROP_002 — Mountain Loft, Park City, UT
 - Door code: 7156
 - Parking: street parking, permit provided at check-in
 - Today's schedule:
-  - Current guest: James Wright (+18015550002), checking out tomorrow 10:00 AM
-  - Cleaning crew: scheduled tomorrow 10:00 AM – 12:00 PM (same crew as PROP_001 — they do PROP_002 first, then drive to PROP_001)
+  - Current guest: James Wright (+18015550002), checking out tomorrow 11:00 AM
+  - Cleaning crew: scheduled tomorrow 11:00 AM – 1:00 PM (same crew as PROP_001 — they do PROP_002 first, then drive to PROP_001)
   - Next guest: Anna Park (+18015550005), checking in tomorrow 3:00 PM
 
 PROP_003 — Canyon House, Moab, UT

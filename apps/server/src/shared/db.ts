@@ -72,7 +72,7 @@ const workOrderSchema = new Schema<WorkOrder>({
   estimated_cost: { type: Number, required: true },
   status: {
     type: String,
-    enum: ['dispatched', 'in_progress', 'completed', 'cancelled'],
+    enum: ['pending', 'dispatched', 'in_progress', 'completed', 'cancelled'],
     required: true,
   },
   created_at: { type: String, required: true },

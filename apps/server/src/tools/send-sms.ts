@@ -7,7 +7,7 @@ async function resolveRecipient(
   phone: string,
 ): Promise<{ name: string; type: 'guest' | 'vendor' | 'owner' } | null> {
   // Check owner
-  const owner = getOwnerSettings();
+  const owner = await getOwnerSettings();
   if (phone === owner.phone) {
     return { name: `${owner.name} (Owner)`, type: 'owner' };
   }

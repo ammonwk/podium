@@ -312,6 +312,72 @@ export const toolDefinitions: LLMToolDefinition[] = [
       },
     },
   },
+  {
+    name: 'query_database',
+    description:
+      'Query the property management database. Supports read-only find and aggregate operations on whitelisted collections. Use find for specific records and aggregate for summaries, counts, averages, and grouped data. Results are capped at 50 documents.',
+    input_schema: {
+      type: 'object',
+      required: ['collection', 'operation'],
+      properties: {
+        collection: {
+          type: 'string',
+          enum: ['bookings', 'properties', 'workorders', 'scheduleevents', 'decisions', 'vendors', 'scheduledtasks'],
+          description: 'The collection to query',
+        },
+        operation: {
+          type: 'string',
+          enum: ['find', 'aggregate'],
+          description: 'Query operation: "find" for filtering documents, "aggregate" for pipelines (group, sum, avg, etc.)',
+        },
+        filter: {
+          type: 'object',
+          description: 'MongoDB query filter (for find operations). Example: { "status": "active" }',
+        },
+        pipeline: {
+          type: 'array',
+          description: 'MongoDB aggregation pipeline stages (for aggregate operations). Example: [{ "$group": { "_id": "$status", "count": { "$sum": 1 } } }]',
+        },
+        sort: {
+          type: 'object',
+          description: 'Sort specification. Example: { "created_at": -1 }',
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum documents to return (default and max: 50)',
+        },
+      },
+    },
+  },
+  {
+    name: 'report_maintenance_issue',
+    description:
+      'Report a maintenance issue at a property on behalf of a guest. Creates a work order and automatically finds and dispatches the best available vendor. Returns a pending status immediately — the vendor matching happens in the background and the guest will be updated via chat.',
+    input_schema: {
+      type: 'object',
+      required: ['property_id', 'issue_description', 'category', 'severity'],
+      properties: {
+        property_id: {
+          type: 'string',
+          description: 'Property ID (e.g., PROP_001)',
+        },
+        issue_description: {
+          type: 'string',
+          description: 'Detailed description of the maintenance issue as reported by the guest',
+        },
+        category: {
+          type: 'string',
+          enum: ['plumbing', 'electrical', 'hvac', 'cleaning', 'general'],
+          description: 'Category of the maintenance issue',
+        },
+        severity: {
+          type: 'string',
+          enum: ['low', 'medium', 'high', 'emergency'],
+          description: 'Severity level: low (cosmetic), medium (comfort), high (significant impact), emergency (safety/water/fire)',
+        },
+      },
+    },
+  },
 ];
 
 export const ALL_TOOLS = toolDefinitions;
@@ -323,6 +389,14 @@ export const CHAT_BOOKING_TOOLS: LLMToolDefinition[] = toolDefinitions.filter((t
     TOOL_NAMES.GET_PROPERTY_STATUS,
     TOOL_NAMES.LOOKUP_GUEST,
   ].includes(t.name as any),
+);
+
+export const CHAT_OWNER_TOOLS: LLMToolDefinition[] = toolDefinitions.filter((t) =>
+  [TOOL_NAMES.QUERY_DATABASE].includes(t.name as any),
+);
+
+export const CHAT_OCCUPANT_TOOLS: LLMToolDefinition[] = toolDefinitions.filter((t) =>
+  [TOOL_NAMES.REPORT_MAINTENANCE_ISSUE, TOOL_NAMES.LOOKUP_GUEST].includes(t.name as any),
 );
 
 export const NO_TOOLS: LLMToolDefinition[] = [];

@@ -54,6 +54,8 @@ export const TOOL_NAMES = {
   EDIT_BOOKING: 'edit_booking',
   GET_PROPERTY_STATUS: 'get_property_status',
   LOOKUP_GUEST: 'lookup_guest',
+  QUERY_DATABASE: 'query_database',
+  REPORT_MAINTENANCE_ISSUE: 'report_maintenance_issue',
 } as const;
 
 // ─── SSE Event Names ─────────────────────────────────────────────────────────
@@ -98,6 +100,8 @@ export const TOOL_COLORS: Record<string, string> = {
   edit_booking: '#7C3AED',
   get_property_status: '#10B981',
   lookup_guest: '#8B5CF6',
+  query_database: '#6366F1',
+  report_maintenance_issue: '#F59E0B',
 };
 
 // ─── Dashboard Theme ─────────────────────────────────────────────────────────

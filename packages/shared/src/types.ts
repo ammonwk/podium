@@ -68,7 +68,7 @@ export interface WorkOrder {
   issue_description: string;
   severity: 'low' | 'medium' | 'high' | 'emergency';
   estimated_cost: number;
-  status: 'dispatched' | 'in_progress' | 'completed' | 'cancelled';
+  status: 'pending' | 'dispatched' | 'in_progress' | 'completed' | 'cancelled';
   created_at: string;
 }
 
@@ -160,6 +160,37 @@ export interface EditBookingInput {
   new_check_in?: string;
   new_check_out?: string;
   new_property_id?: string;
+}
+
+export interface QueryDatabaseInput {
+  collection: 'bookings' | 'properties' | 'workorders' | 'scheduleevents' | 'decisions' | 'vendors' | 'scheduledtasks';
+  operation: 'find' | 'aggregate';
+  filter?: Record<string, unknown>;
+  pipeline?: Record<string, unknown>[];
+  sort?: Record<string, unknown>;
+  limit?: number;
+}
+
+export interface ReportMaintenanceIssueInput {
+  property_id: string;
+  issue_description: string;
+  category: 'plumbing' | 'electrical' | 'hvac' | 'cleaning' | 'general';
+  severity: 'low' | 'medium' | 'high' | 'emergency';
+}
+
+export interface ReportMaintenanceIssueResult {
+  work_order_id: string;
+  property_name: string;
+  severity: string;
+  status: string;
+  message: string;
+}
+
+export interface QueryDatabaseResult {
+  collection: string;
+  operation: string;
+  count: number;
+  results: Record<string, unknown>[];
 }
 
 // ─── Tool Results ────────────────────────────────────────────────────────────

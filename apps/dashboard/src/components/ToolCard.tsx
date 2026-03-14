@@ -258,7 +258,7 @@ const DecisionCard: React.FC<{
             border: `1px solid ${confStyle.border}`,
           }}
         >
-          {confidence.charAt(0).toUpperCase() + confidence.slice(1)}
+          {(confidence ?? 'medium').charAt(0).toUpperCase() + (confidence ?? 'medium').slice(1)}
         </span>
       </div>
       <div style={styles.body}>

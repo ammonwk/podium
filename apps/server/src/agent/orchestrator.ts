@@ -129,7 +129,7 @@ export async function runLoop(
         isError = true;
       } else {
         try {
-          result = await executeTool(tc.name, tc.input);
+          result = await executeTool(tc.name, tc.input, context.sessionId ? { sessionId: context.sessionId } : undefined);
         } catch (err: any) {
           console.error(`[${context.label}:${tc.name}] Error:`, err.message);
           result = { error: err.message };

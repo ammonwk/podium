@@ -21,4 +21,5 @@ export interface LoopContext {
   tools: LLMToolDefinition[];
   systemPrompt: string;
   emitter: LoopEmitter;
+  sessionId?: string;
 }

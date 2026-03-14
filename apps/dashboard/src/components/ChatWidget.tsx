@@ -51,6 +51,10 @@ function summarizeToolResult(toolName: string, result: Record<string, unknown>, 
     return 'Property status retrieved';
   }
 
+  if (toolName === 'report_maintenance_issue') {
+    return `${result.property_name}: ${result.severity} issue reported (${result.status})`;
+  }
+
   // Fallback: show first few keys
   const keys = Object.keys(result).slice(0, 3);
   return keys.map((k) => `${k}: ${JSON.stringify(result[k])}`).join(', ');
