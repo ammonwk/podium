@@ -144,8 +144,9 @@ export async function seed(): Promise<void> {
   const today = new Date(tomorrow);
   today.setDate(today.getDate() - 1);
 
-  // Clear all collections
+  // Clear all collections and drop stale indexes
   await Promise.all([
+    BookingModel.collection.dropIndexes().catch(() => {}),
     PropertyModel.deleteMany({}),
     BookingModel.deleteMany({}),
     ScheduleEventModel.deleteMany({}),

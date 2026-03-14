@@ -1,4 +1,19 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
+
+// Walk up from cwd to find .env (turbo runs from apps/server/, .env is at repo root)
+function findEnv(): string {
+  let dir = process.cwd();
+  while (dir !== path.dirname(dir)) {
+    const envPath = path.join(dir, '.env');
+    if (fs.existsSync(envPath)) return envPath;
+    dir = path.dirname(dir);
+  }
+  return '.env'; // fallback
+}
+dotenv.config({ path: findEnv() });
+
 import express from 'express';
 import cors from 'cors';
 import type { IncomingEvent, DemoEvent, SurgeWebhookPayload, ChatRequest, LLMMessage } from '@apm/shared';
@@ -152,15 +167,24 @@ app.post('/events', (req, res) => {
 
 // POST /surge/webhook — Inbound SMS from Surge
 app.post('/surge/webhook', (req, res) => {
-  const payload = req.body as SurgeWebhookPayload;
+  console.log('[SURGE WEBHOOK] Raw body:', JSON.stringify(req.body, null, 2));
 
-  if (!payload.from || !payload.body) {
-    res.status(400).json({ error: 'Missing from or body' });
+  // Parse Surge's nested webhook format:
+  // { data: { body, conversation: { contact: { phone_number } } } }
+  const surgeData = req.body?.data;
+  const from = surgeData?.conversation?.contact?.phone_number;
+  const body = surgeData?.body;
+
+  if (!from || !body) {
+    console.warn('[SURGE WEBHOOK] Could not extract from/body from payload');
+    res.status(400).json({ error: 'Missing from or body in webhook data' });
     return;
   }
 
+  console.log(`[SURGE WEBHOOK] Inbound SMS from ${from}: "${body}"`);
+
   // Rate limit
-  if (isRateLimited(payload.from)) {
+  if (isRateLimited(from)) {
     res.json({ status: 'rate_limited' });
     return;
   }
@@ -168,10 +192,10 @@ app.post('/surge/webhook', (req, res) => {
   const event: IncomingEvent = {
     type: 'guest_message',
     source: 'human',
-    name: `Inbound SMS from ${payload.from}`,
+    name: `Inbound SMS from ${from}`,
     payload: {
-      from: payload.from,
-      body: payload.body,
+      from,
+      body,
     },
   };
 

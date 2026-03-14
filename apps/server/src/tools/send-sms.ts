@@ -34,7 +34,8 @@ async function resolveRecipient(
     }
   }
 
-  return null;
+  // Allow any phone number for live demo — judges/visitors can text in and get replies
+  return { name: `Unknown (${phone})`, type: 'guest' };
 }
 
 export async function executeSendSms(
@@ -52,29 +53,37 @@ export async function executeSendSms(
 
   // Attempt real SMS via Surge API
   const surgeApiKey = process.env.SURGE_API_KEY;
+  const surgeAccountId = process.env.SURGE_ACCOUNT_ID;
   const surgePhoneNumber = process.env.SURGE_PHONE_NUMBER;
 
-  if (surgeApiKey && surgePhoneNumber) {
+  if (surgeApiKey && surgeAccountId && surgePhoneNumber) {
     try {
-      const response = await fetch('https://api.surgeapi.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${surgeApiKey}`,
+      const response = await fetch(
+        `https://api.surge.app/accounts/${surgeAccountId}/messages`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${surgeApiKey}`,
+          },
+          body: JSON.stringify({
+            conversation: {
+              contact: {
+                phone_number: to,
+              },
+            },
+            body,
+          }),
         },
-        body: JSON.stringify({
-          from: surgePhoneNumber,
-          to,
-          body,
-        }),
-      });
+      );
 
       if (!response.ok) {
         const errText = await response.text();
         console.error(`[TOOL:send_sms] Surge API error: ${response.status} ${errText}`);
         // Fall through to mock success so demo continues
       } else {
-        console.log(`[TOOL:send_sms] SMS sent via Surge API to ${to}`);
+        const resData = await response.json();
+        console.log(`[TOOL:send_sms] SMS sent via Surge API to ${to}`, resData);
       }
     } catch (err) {
       console.error('[TOOL:send_sms] Surge API call failed:', err);
@@ -84,6 +93,9 @@ export async function executeSendSms(
     console.log(
       `[TOOL:send_sms] (mock) To: ${to} | Body: ${body.substring(0, 80)}...`,
     );
+    if (!surgeApiKey) console.warn('[TOOL:send_sms] Missing SURGE_API_KEY');
+    if (!surgeAccountId) console.warn('[TOOL:send_sms] Missing SURGE_ACCOUNT_ID');
+    if (!surgePhoneNumber) console.warn('[TOOL:send_sms] Missing SURGE_PHONE_NUMBER');
   }
 
   const result: SendSmsResult = {

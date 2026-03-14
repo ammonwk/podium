@@ -91,7 +91,7 @@ export async function runAgentLoop(
     let stopReason = '';
 
     try {
-      const stream = client.stream(system, conversationHistory, []);
+      const stream = client.stream(system, conversationHistory, toolDefinitions);
 
       for await (const event of stream) {
         switch (event.type) {
