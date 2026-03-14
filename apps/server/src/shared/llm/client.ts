@@ -3,7 +3,7 @@ import { DEFAULT_PROVIDER } from '@apm/shared';
 import { AnthropicClient } from './anthropic.js';
 import { CerebrasClient } from './cerebras.js';
 
-let activeClient: LLMClient = createClient(DEFAULT_PROVIDER);
+let activeClient: LLMClient | null = null;
 let activeConfig: ProviderConfig = { ...DEFAULT_PROVIDER };
 
 function createClient(config: ProviderConfig): LLMClient {
@@ -18,6 +18,9 @@ function createClient(config: ProviderConfig): LLMClient {
 }
 
 export function getActiveClient(): LLMClient {
+  if (!activeClient) {
+    activeClient = createClient(activeConfig);
+  }
   return activeClient;
 }
 

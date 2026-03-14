@@ -1,4 +1,19 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
+
+// Walk up from cwd to find .env (turbo runs from apps/server/, .env is at repo root)
+function findEnv(): string {
+  let dir = process.cwd();
+  while (dir !== path.dirname(dir)) {
+    const envPath = path.join(dir, '.env');
+    if (fs.existsSync(envPath)) return envPath;
+    dir = path.dirname(dir);
+  }
+  return '.env'; // fallback
+}
+dotenv.config({ path: findEnv() });
+
 import express from 'express';
 import cors from 'cors';
 import type { IncomingEvent, DemoEvent, SurgeWebhookPayload } from '@apm/shared';
@@ -146,6 +161,7 @@ app.post('/events', (req, res) => {
 
 // POST /surge/webhook — Inbound SMS from Surge
 app.post('/surge/webhook', (req, res) => {
+  console.log('[SURGE WEBHOOK] Raw body:', JSON.stringify(req.body, null, 2));
   const payload = req.body as SurgeWebhookPayload;
 
   if (!payload.from || !payload.body) {
