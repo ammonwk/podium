@@ -216,6 +216,18 @@ function applySSEEvent(
       if (prev.events.some(ev => ev.name === p.event_name)) {
         return prev;
       }
+
+      // If the server included trigger message content (real inbound SMS),
+      // store it as a pending trigger so EVENT_START can attach it
+      if (p.trigger_from && p.trigger_body) {
+        ctx.pendingTriggers.set(p.event_name, {
+          from: p.trigger_from,
+          body: p.trigger_body,
+          name: p.event_name,
+        });
+      }
+
+      const trigger = ctx.pendingTriggers.get(p.event_name);
       const newEvent: EventState = {
         name: p.event_name,
         source: p.source,
@@ -224,6 +236,7 @@ function applySSEEvent(
         toolCalls: [],
         conversationId: p.conversation_id,
         conversationType: p.conversation_type,
+        triggerMessage: trigger,
       };
       return {
         ...prev,
@@ -559,23 +572,33 @@ export function useSSE(): DashboardState & {
           };
 
           // Pre-populate trigger messages from the historical events:
-          // For each event_queued with a guest_message source, find the matching
-          // DEMO_EVENT and create a trigger message
+          // For each event_queued with a guest_message source, use the trigger data
+          // from the persisted SSE payload (real SMS) or fall back to DEMO_EVENTS
           for (const evt of data.events) {
             if (evt.type === 'event_queued' && evt.source === 'human') {
-              const demoEvt = DEMO_EVENTS.find((d: any) => d.name === evt.event_name);
-              if (demoEvt && demoEvt.type === 'guest_message' && demoEvt.body) {
+              // Real inbound SMS: server includes trigger_from/trigger_body
+              if (evt.trigger_from && evt.trigger_body) {
                 ctx.pendingTriggers.set(evt.event_name, {
-                  from: demoEvt.from || '',
-                  body: demoEvt.body || '',
-                  name: demoEvt.name,
+                  from: evt.trigger_from,
+                  body: evt.trigger_body,
+                  name: evt.event_name,
                 });
-              } else if (demoEvt && demoEvt.type === 'market_alert') {
-                ctx.pendingTriggers.set(evt.event_name, {
-                  from: 'Market Alert',
-                  body: (demoEvt as any).message || '',
-                  name: demoEvt.name,
-                });
+              } else {
+                // Demo events: look up from hardcoded DEMO_EVENTS
+                const demoEvt = DEMO_EVENTS.find((d: any) => d.name === evt.event_name);
+                if (demoEvt && demoEvt.type === 'guest_message' && demoEvt.body) {
+                  ctx.pendingTriggers.set(evt.event_name, {
+                    from: demoEvt.from || '',
+                    body: demoEvt.body || '',
+                    name: demoEvt.name,
+                  });
+                } else if (demoEvt && demoEvt.type === 'market_alert') {
+                  ctx.pendingTriggers.set(evt.event_name, {
+                    from: 'Market Alert',
+                    body: (demoEvt as any).message || '',
+                    name: demoEvt.name,
+                  });
+                }
               }
             }
           }

@@ -174,9 +174,14 @@ function enqueueEvent(event: IncomingEvent, laneId: string, laneType: Conversati
   const laneContext: LaneContext = { conversation_id: laneId, conversation_type: laneType };
 
   // Emit queued event immediately so dashboard can show it
+  // Include trigger message content for guest_message events so the frontend
+  // can display the inbound SMS (not just for demo events)
   emitSSE('event_queued', {
     event_name: event.name,
     source: event.source,
+    ...(event.type === 'guest_message' && event.payload?.from && event.payload?.body
+      ? { trigger_from: event.payload.from, trigger_body: event.payload.body }
+      : {}),
   }, laneContext);
 
   console.log(
