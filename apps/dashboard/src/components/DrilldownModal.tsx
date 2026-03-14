@@ -1,7 +1,8 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { THEME, TOOL_COLORS } from '@apm/shared';
 import { RADIUS, ANIMATION, SHADOW } from '../styles/theme';
 import type { PropertyState, EventState, ToolCallData, ActivityItem } from '../hooks/useSSE';
+import { renderToolContent } from './ToolCard';
 
 type DrilldownData =
   | { type: 'property'; data: PropertyState }
@@ -172,17 +173,16 @@ const EventDetail: React.FC<{ event: EventState }> = ({ event }) => {
       {event.toolCalls.length > 0 && (
         <div style={styles.detailSection}>
           <h3 style={styles.sectionTitle}>Tool Calls ({event.toolCalls.length})</h3>
-          {event.toolCalls.map((tc) => (
-            <div key={tc.id} style={styles.toolCallSummary}>
-              <div style={{
-                ...styles.toolCallName,
-                color: TOOL_COLORS[tc.tool_name] || THEME.text.secondary,
-              }}>
-                {tc.tool_name}
+          {event.toolCalls.map((tc) => {
+            const color = TOOL_COLORS[tc.tool_name] || THEME.text.secondary;
+            return (
+              <div key={tc.id} style={styles.toolCallSummary}>
+                <div style={styles.richToolContent}>
+                  {renderToolContent(tc, color)}
+                </div>
               </div>
-              <pre style={styles.miniCodeBlock}>{JSON.stringify(tc.input, null, 2)}</pre>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </>
@@ -192,6 +192,7 @@ const EventDetail: React.FC<{ event: EventState }> = ({ event }) => {
 // ─── Tool Call Detail ────────────────────────────────────────────────────────
 
 const ToolCallDetail: React.FC<{ toolCall: ToolCallData }> = ({ toolCall }) => {
+  const [showRaw, setShowRaw] = useState(false);
   const color = TOOL_COLORS[toolCall.tool_name] || THEME.text.secondary;
 
   return (
@@ -206,13 +207,27 @@ const ToolCallDetail: React.FC<{ toolCall: ToolCallData }> = ({ toolCall }) => {
       </div>
 
       <div style={styles.detailSection}>
-        <h3 style={styles.sectionTitle}>Input</h3>
-        <SyntaxHighlightedJson data={toolCall.input} />
+        <div style={styles.richToolContent}>
+          {renderToolContent(toolCall, color)}
+        </div>
       </div>
 
       <div style={styles.detailSection}>
-        <h3 style={styles.sectionTitle}>Result</h3>
-        <SyntaxHighlightedJson data={toolCall.result} />
+        <button
+          style={styles.rawToggleBtn}
+          onClick={() => setShowRaw(!showRaw)}
+        >
+          <span style={{ fontSize: 12 }}>{showRaw ? '\u25BE' : '\u25B8'}</span>
+          {showRaw ? 'Hide raw data' : 'Show raw data'}
+        </button>
+        {showRaw && (
+          <>
+            <h3 style={styles.sectionTitle}>Input</h3>
+            <SyntaxHighlightedJson data={toolCall.input} />
+            <h3 style={{ ...styles.sectionTitle, marginTop: 12 }}>Result</h3>
+            <SyntaxHighlightedJson data={toolCall.result} />
+          </>
+        )}
       </div>
     </>
   );
@@ -466,5 +481,24 @@ const styles: Record<string, React.CSSProperties> = {
     textTransform: 'uppercase' as const,
     letterSpacing: '0.04em',
     marginBottom: '4px',
+  },
+  richToolContent: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+  },
+  rawToggleBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    background: 'none',
+    border: 'none',
+    padding: '4px 0',
+    cursor: 'pointer',
+    fontFamily: THEME.font.sans,
+    fontSize: '13px',
+    fontWeight: 500,
+    color: THEME.text.muted,
+    outline: 'none',
   },
 };

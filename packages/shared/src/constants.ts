@@ -68,6 +68,7 @@ export const TOOL_NAMES = {
 
 export const SSE_EVENTS = {
   THINKING: 'thinking',
+  ASSISTANT_TEXT: 'assistant_text',
   TOOL_CALL: 'tool_call',
   EVENT_START: 'event_start',
   EVENT_DONE: 'event_done',

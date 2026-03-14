@@ -346,6 +346,7 @@ export interface PropertyStatusEntry {
 
 export type SSEEventType =
   | 'thinking'
+  | 'assistant_text'
   | 'tool_call'
   | 'event_start'
   | 'event_done'
@@ -363,6 +364,11 @@ export interface SSEEvent {
 }
 
 export interface ThinkingPayload {
+  text: string;
+  event_name: string;
+}
+
+export interface AssistantTextPayload {
   text: string;
   event_name: string;
 }

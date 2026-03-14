@@ -35,7 +35,7 @@ export const ToolCard: React.FC<Props> = ({ toolCall, index, onClick }) => {
   );
 };
 
-function renderToolContent(toolCall: ToolCallData, color: string): React.ReactNode {
+export function renderToolContent(toolCall: ToolCallData, color: string): React.ReactNode {
   const input = toolCall.input as Record<string, unknown>;
   const result = toolCall.result as Record<string, unknown>;
 
@@ -54,6 +54,22 @@ function renderToolContent(toolCall: ToolCallData, color: string): React.ReactNo
       return <ScheduleUpdateCard input={input} result={result} color={color} />;
     case 'schedule_task':
       return <ScheduleTaskCard input={input} result={result} color={color} />;
+    case 'get_property_status':
+      return <PropertyStatusCard input={input} result={result} color={color} />;
+    case 'lookup_guest':
+      return <LookupGuestCard input={input} result={result} color={color} />;
+    case 'query_database':
+      return <QueryDatabaseCard input={input} result={result} color={color} />;
+    case 'report_maintenance_issue':
+      return <ReportMaintenanceCard input={input} result={result} color={color} />;
+    case 'create_booking':
+      return <CreateBookingCard input={input} result={result} color={color} />;
+    case 'edit_booking':
+      return <EditBookingCard input={input} result={result} color={color} />;
+    case 'escalate_to_owner':
+      return <EscalateCard input={input} result={result} color={color} />;
+    case 'send_payment_link':
+      return <PaymentLinkCard input={input} result={result} color={color} />;
     default:
       return <GenericCard toolName={toolCall.tool_name} input={input} result={result} />;
   }
@@ -412,6 +428,328 @@ const ScheduleTaskCard: React.FC<{
             letterSpacing: '-0.01em',
           }}>
             Fires in {firesIn}
+          </span>
+        </div>
+      )}
+    </>
+  );
+};
+
+// ─── Property Status Card ─────────────────────────────────────────────────────
+
+const PropertyStatusCard: React.FC<{
+  input: Record<string, unknown>;
+  result: Record<string, unknown>;
+  color: string;
+}> = ({ input, result, color }) => {
+  const properties = (result.properties as Array<Record<string, unknown>>) || [];
+  const propertyId = (input.property_id as string) || '';
+  const checkStart = (input.check_availability_start as string) || '';
+  const checkEnd = (input.check_availability_end as string) || '';
+
+  return (
+    <>
+      <div style={styles.header}>
+        <span style={{ ...styles.headerLabel, color }}>Property Status</span>
+        {propertyId && <span style={styles.headerDetail}>{propertyId}</span>}
+      </div>
+      <div style={styles.body}>
+        {(checkStart || checkEnd) && (
+          <div style={styles.bodyRow}>
+            <span style={styles.bodyLabel}>Checking</span>
+            <span style={styles.bodyValue}>{checkStart} — {checkEnd}</span>
+          </div>
+        )}
+        {properties.map((p, i) => (
+          <div key={i} style={{ ...styles.bodyRow, flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+            <span style={styles.bodyValue}>
+              {(p.property_name as string) || (p.property_id as string)}
+              {' '}
+              <span style={styles.bodyMuted}>${p.current_price as number}/night</span>
+            </span>
+            {(p.available_windows as Array<Record<string, unknown>>)?.length > 0 && (
+              <span style={{ fontSize: 13, color: THEME.status.normal }}>
+                {(p.available_windows as Array<Record<string, unknown>>).length} available window(s)
+              </span>
+            )}
+            {(p.bookings as Array<Record<string, unknown>>)?.length > 0 && (
+              <span style={styles.bodyMuted}>
+                {(p.bookings as Array<Record<string, unknown>>).length} booking(s)
+              </span>
+            )}
+          </div>
+        ))}
+        {properties.length === 0 && (
+          <span style={styles.bodyMuted}>No properties returned</span>
+        )}
+      </div>
+    </>
+  );
+};
+
+// ─── Lookup Guest Card ────────────────────────────────────────────────────────
+
+const LookupGuestCard: React.FC<{
+  input: Record<string, unknown>;
+  result: Record<string, unknown>;
+  color: string;
+}> = ({ input, result, color }) => {
+  const guestName = (result.guest_name as string) || (input.guest_phone as string) || 'Unknown';
+  const phone = (input.guest_phone as string) || (input.phone as string) || '';
+
+  return (
+    <>
+      <div style={styles.header}>
+        <span style={{ ...styles.headerLabel, color }}>Lookup Guest</span>
+      </div>
+      <div style={styles.body}>
+        <div style={styles.bodyRow}>
+          <span style={styles.bodyLabel}>Guest</span>
+          <span style={styles.bodyValue}>{guestName}</span>
+        </div>
+        {phone && (
+          <div style={styles.bodyRow}>
+            <span style={styles.bodyLabel}>Phone</span>
+            <span style={{ ...styles.bodyValue, fontFamily: THEME.font.mono }}>{phone}</span>
+          </div>
+        )}
+      </div>
+    </>
+  );
+};
+
+// ─── Query Database Card ──────────────────────────────────────────────────────
+
+const QueryDatabaseCard: React.FC<{
+  input: Record<string, unknown>;
+  result: Record<string, unknown>;
+  color: string;
+}> = ({ input, result, color }) => {
+  const collection = (input.collection as string) || '';
+  const operation = (input.operation as string) || '';
+  const count = (result.count as number) ?? '?';
+  const filterObj = input.filter as Record<string, unknown> | undefined;
+  const filterKeys = filterObj && typeof filterObj === 'object' ? Object.keys(filterObj) : [];
+
+  return (
+    <>
+      <div style={styles.header}>
+        <span style={{ ...styles.headerLabel, color }}>Database Query</span>
+        <span style={styles.categoryBadge}>{collection}</span>
+      </div>
+      <div style={styles.body}>
+        <div style={styles.bodyRow}>
+          <span style={styles.bodyLabel}>Operation</span>
+          <span style={styles.bodyValue}>{operation}</span>
+        </div>
+        <div style={styles.bodyRow}>
+          <span style={styles.bodyLabel}>Results</span>
+          <span style={{ ...styles.bodyValue, fontFamily: THEME.font.mono, fontWeight: 700 }}>{count}</span>
+        </div>
+        {filterKeys.length > 0 && (
+          <div style={styles.bodyRow}>
+            <span style={styles.bodyLabel}>Filter</span>
+            <span style={styles.bodyMuted}>{filterKeys.join(', ')}</span>
+          </div>
+        )}
+      </div>
+    </>
+  );
+};
+
+// ─── Report Maintenance Card ──────────────────────────────────────────────────
+
+const ReportMaintenanceCard: React.FC<{
+  input: Record<string, unknown>;
+  result: Record<string, unknown>;
+  color: string;
+}> = ({ input, result, color }) => {
+  const severity = (input.severity as string) || 'medium';
+  const category = (input.category as string) || '';
+  const issue = (input.issue_description as string) || '';
+  const propertyName = (result.property_name as string) || (input.property_id as string) || '';
+
+  return (
+    <>
+      <div style={styles.header}>
+        <span style={{ ...styles.headerLabel, color }}>Maintenance Report</span>
+        <span style={{ ...styles.severityBadge, ...(SEVERITY_STYLES[severity] || SEVERITY_STYLES.medium) }}>
+          {severity.toUpperCase()}
+        </span>
+      </div>
+      <div style={styles.body}>
+        {propertyName && (
+          <div style={styles.bodyRow}>
+            <span style={styles.bodyLabel}>Property</span>
+            <span style={styles.bodyValue}>{propertyName}</span>
+          </div>
+        )}
+        {category && (
+          <div style={styles.bodyRow}>
+            <span style={styles.bodyLabel}>Category</span>
+            <span style={{ ...styles.bodyValue, textTransform: 'capitalize' as const }}>{category}</span>
+          </div>
+        )}
+        <div style={styles.bodyRow}>
+          <span style={styles.bodyLabel}>Issue</span>
+          <span style={styles.bodyValue}>{issue}</span>
+        </div>
+      </div>
+    </>
+  );
+};
+
+// ─── Create Booking Card ──────────────────────────────────────────────────────
+
+const CreateBookingCard: React.FC<{
+  input: Record<string, unknown>;
+  result: Record<string, unknown>;
+  color: string;
+}> = ({ input, result, color }) => {
+  const guestName = (result.guest_name as string) || (input.guest_name as string) || '';
+  const propertyName = (result.property_name as string) || (input.property_id as string) || '';
+  const checkIn = (result.check_in as string) || (input.check_in as string) || '';
+  const checkOut = (result.check_out as string) || (input.check_out as string) || '';
+  const nights = (result.nights as number) || 0;
+  const total = (result.total_estimate as number) || 0;
+
+  return (
+    <>
+      <div style={styles.header}>
+        <span style={{ ...styles.headerLabel, color }}>New Booking</span>
+      </div>
+      <div style={styles.body}>
+        <div style={styles.bodyRow}>
+          <span style={styles.bodyLabel}>Guest</span>
+          <span style={styles.bodyValue}>{guestName}</span>
+        </div>
+        <div style={styles.bodyRow}>
+          <span style={styles.bodyLabel}>Property</span>
+          <span style={styles.bodyValue}>{propertyName}</span>
+        </div>
+        <div style={styles.bodyRow}>
+          <span style={styles.bodyLabel}>Dates</span>
+          <span style={styles.bodyValue}>{checkIn} — {checkOut}</span>
+        </div>
+      </div>
+      <div style={styles.footer}>
+        {nights > 0 && <span style={styles.footerStatus}>{nights} night{nights !== 1 ? 's' : ''}</span>}
+        {total > 0 && <span style={styles.footerCost}>${total.toLocaleString()}</span>}
+      </div>
+    </>
+  );
+};
+
+// ─── Edit Booking Card ────────────────────────────────────────────────────────
+
+const EditBookingCard: React.FC<{
+  input: Record<string, unknown>;
+  result: Record<string, unknown>;
+  color: string;
+}> = ({ input, result, color }) => {
+  const propertyName = (result.property_name as string) || '';
+  const changes = (result.changes as string) || '';
+  const checkIn = (result.check_in as string) || '';
+  const checkOut = (result.check_out as string) || '';
+
+  return (
+    <>
+      <div style={styles.header}>
+        <span style={{ ...styles.headerLabel, color }}>Edit Booking</span>
+      </div>
+      <div style={styles.body}>
+        {propertyName && (
+          <div style={styles.bodyRow}>
+            <span style={styles.bodyLabel}>Property</span>
+            <span style={styles.bodyValue}>{propertyName}</span>
+          </div>
+        )}
+        {changes && (
+          <div style={styles.bodyRow}>
+            <span style={styles.bodyLabel}>Changes</span>
+            <span style={styles.bodyValue}>{changes}</span>
+          </div>
+        )}
+        {(checkIn || checkOut) && (
+          <div style={styles.bodyRow}>
+            <span style={styles.bodyLabel}>Dates</span>
+            <span style={styles.bodyValue}>{checkIn} — {checkOut}</span>
+          </div>
+        )}
+      </div>
+    </>
+  );
+};
+
+// ─── Escalate to Owner Card ──────────────────────────────────────────────────
+
+const EscalateCard: React.FC<{
+  input: Record<string, unknown>;
+  result: Record<string, unknown>;
+  color: string;
+}> = ({ input, result, color }) => {
+  const severity = (input.severity as string) || 'high';
+  const summary = (input.summary as string) || '';
+  const ownerName = (result.owner_name as string) || '';
+
+  return (
+    <>
+      <div style={styles.header}>
+        <span style={{ ...styles.headerLabel, color }}>Escalation</span>
+        <span style={{ ...styles.severityBadge, ...(SEVERITY_STYLES[severity] || SEVERITY_STYLES.high) }}>
+          {severity.toUpperCase()}
+        </span>
+      </div>
+      <div style={styles.body}>
+        {ownerName && (
+          <div style={styles.bodyRow}>
+            <span style={styles.bodyLabel}>Owner</span>
+            <span style={styles.bodyValue}>{ownerName}</span>
+          </div>
+        )}
+        <div style={styles.decisionSummary}>{summary}</div>
+      </div>
+    </>
+  );
+};
+
+// ─── Payment Link Card ───────────────────────────────────────────────────────
+
+const PaymentLinkCard: React.FC<{
+  input: Record<string, unknown>;
+  result: Record<string, unknown>;
+  color: string;
+}> = ({ result, color }) => {
+  const totalDisplay = (result.total_display as string) || '';
+  const status = (result.status as string) || '';
+  const bookingId = (result.booking_id as string) || '';
+
+  return (
+    <>
+      <div style={styles.header}>
+        <span style={{ ...styles.headerLabel, color }}>Payment Link</span>
+      </div>
+      <div style={styles.body}>
+        {bookingId && (
+          <div style={styles.bodyRow}>
+            <span style={styles.bodyLabel}>Booking</span>
+            <span style={{ ...styles.bodyValue, fontFamily: THEME.font.mono }}>{bookingId}</span>
+          </div>
+        )}
+        {totalDisplay && (
+          <div style={styles.bodyRow}>
+            <span style={styles.bodyLabel}>Amount</span>
+            <span style={{ ...styles.bodyValue, fontWeight: 700 }}>{totalDisplay}</span>
+          </div>
+        )}
+      </div>
+      {status && (
+        <div style={styles.footer}>
+          <span style={{
+            ...styles.footerStatus,
+            color: status === 'link_created' ? THEME.status.normal : THEME.text.muted,
+          }}>
+            {status === 'link_created' ? '✓ Link Created' : status}
           </span>
         </div>
       )}

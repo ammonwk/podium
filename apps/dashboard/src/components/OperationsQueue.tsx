@@ -611,7 +611,8 @@ const ExpandedDetail: React.FC<{
     | { kind: 'inbound_sms'; from: string; body: string; ts: number }
     | { kind: 'outbound_sms'; to: string; body: string; status: string; timestamp: string; tc: ToolCallData; idx: number }
     | { kind: 'tool'; tc: ToolCallData; idx: number }
-    | { kind: 'reasoning' };
+    | { kind: 'reasoning' }
+    | { kind: 'assistant_message'; text: string };
 
   const items: TimelineItem[] = [];
   let toolIdx = 0;
@@ -652,6 +653,11 @@ const ExpandedDetail: React.FC<{
         items.push({ kind: 'tool', tc, idx: toolIdx });
       }
       toolIdx++;
+    }
+
+    // Assistant response message for this event
+    if (ev.assistantText) {
+      items.push({ kind: 'assistant_message', text: ev.assistantText });
     }
   }
 
@@ -709,6 +715,16 @@ const ExpandedDetail: React.FC<{
                         {formatTimestamp(item.timestamp)}
                       </span>
                     )}
+                  </div>
+                </div>
+              );
+
+            case 'assistant_message':
+              return (
+                <div key={`assistant-${i}`} style={assistantRowStyle}>
+                  <div style={assistantLabelStyle}>Podium</div>
+                  <div style={assistantBubbleStyle}>
+                    {item.text}
                   </div>
                 </div>
               );
@@ -1079,6 +1095,24 @@ const outboundMetaStyle: React.CSSProperties = {
 // Tool call event cards (full width, inline between messages)
 const eventCardRowStyle: React.CSSProperties = {
   margin: '2px 0',
+};
+
+// Assistant message (right-aligned bot bubble, gray-toned)
+const assistantRowStyle: React.CSSProperties = {
+  display: 'flex', flexDirection: 'column', alignItems: 'flex-end',
+};
+const assistantLabelStyle: React.CSSProperties = {
+  fontSize: 12, fontWeight: 700, color: THEME.text.muted,
+  fontFamily: THEME.font.sans, marginBottom: 3, marginRight: 4,
+};
+const assistantBubbleStyle: React.CSSProperties = {
+  backgroundColor: 'rgba(107, 114, 128, 0.08)',
+  border: '1px solid rgba(107, 114, 128, 0.15)',
+  borderRadius: '14px 14px 4px 14px',
+  padding: '10px 14px', maxWidth: '85%',
+  fontSize: 15, color: THEME.text.primary,
+  fontFamily: THEME.font.sans, lineHeight: '1.5',
+  whiteSpace: 'pre-wrap' as const,
 };
 
 // ─── Reasoning ───────────────────────────────────────────────────────────────
