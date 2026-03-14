@@ -21,7 +21,7 @@ import cors from 'cors';
 import Stripe from 'stripe';
 import type { IncomingEvent, DemoEvent, SurgeWebhookPayload, ChatRequest, LLMMessage } from '@apm/shared';
 import { AGENT_CONFIG, PROVIDERS } from '@apm/shared';
-import { connectDB, seed, shouldSeed, initSSESequence, SSEEventLogModel, ConversationModel, ChatSessionModel, ScheduledTaskModel } from './shared/db.js';
+import { connectDB, seed, shouldSeed, initSSESequence, SSEEventLogModel, ConversationModel, ChatSessionModel, ScheduledTaskModel, type ChatSessionRecord } from './shared/db.js';
 import { addClient, emitSSE } from './shared/sse.js';
 import type { LaneContext } from './shared/sse.js';
 import { resetState } from './shared/state.js';
@@ -52,15 +52,17 @@ let proactiveHandle: { stopAll: () => void } | null = null;
 app.use(cors());
 
 // ─── Stripe Webhook (must be before express.json() for raw body verification) ─
-const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY || '');
+const stripeClient = process.env.STRIPE_SECRET_KEY
+  ? new Stripe(process.env.STRIPE_SECRET_KEY)
+  : null;
 
 app.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['stripe-signature'] as string;
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
-  if (!webhookSecret) {
-    console.error('[STRIPE] Missing STRIPE_WEBHOOK_SECRET');
-    res.status(500).json({ error: 'Webhook secret not configured' });
+  if (!stripeClient || !webhookSecret) {
+    console.error('[STRIPE] Stripe not configured');
+    res.status(500).json({ error: 'Stripe not configured' });
     return;
   }
 
@@ -438,19 +440,26 @@ app.post('/chat', async (req, res) => {
 
   const now = new Date().toISOString();
 
-  // Get or create session from MongoDB
-  let session = await ChatSessionModel.findOne({ session_id: sessionId });
-  if (!session) {
-    session = await ChatSessionModel.create({
-      session_id: sessionId,
-      role,
-      phone_number: phoneNumber,
-      messages: [],
-      history: [],
-      created_at: now,
-      updated_at: now,
-    });
-  } else if (phoneNumber && !session.phone_number) {
+  // Get or create session atomically (prevents race when two requests
+  // arrive simultaneously for the same new session)
+  let session = (await ChatSessionModel.findOneAndUpdate(
+    { session_id: sessionId },
+    {
+      $setOnInsert: {
+        session_id: sessionId,
+        role,
+        phone_number: phoneNumber,
+        messages: [],
+        history: [],
+        created_at: now,
+        updated_at: now,
+      },
+    },
+    { upsert: true, new: true },
+  ))!;
+
+  // Update phone if provided and not already set
+  if (phoneNumber && !session.phone_number) {
     session.phone_number = phoneNumber;
   }
 
@@ -462,11 +471,12 @@ app.post('/chat', async (req, res) => {
 
   // Re-load session after awaiting lock to get the latest persisted state
   if (pendingLock) {
-    session = await ChatSessionModel.findOne({ session_id: sessionId });
-    if (!session) {
+    const reloaded = await ChatSessionModel.findOne({ session_id: sessionId });
+    if (!reloaded) {
       res.status(404).json({ error: 'Session lost' });
       return;
     }
+    session = reloaded;
   }
 
   // Persist user message
@@ -820,7 +830,7 @@ async function restoreScheduledTasks(): Promise<void> {
 // ─── Stripe Webhook Registration ─────────────────────────────────────────────
 
 async function ensureStripeWebhook(): Promise<void> {
-  if (!process.env.STRIPE_SECRET_KEY) {
+  if (!process.env.STRIPE_SECRET_KEY || !stripeClient) {
     console.log('[STRIPE] No STRIPE_SECRET_KEY, skipping webhook registration');
     return;
   }
@@ -831,7 +841,7 @@ async function ensureStripeWebhook(): Promise<void> {
   try {
     // Check if a webhook for this URL already exists
     const existing = await stripeClient.webhookEndpoints.list({ limit: 100 });
-    const found = existing.data.find((wh) => wh.url === webhookUrl && wh.status === 'enabled');
+    const found = existing.data.find((wh: Stripe.WebhookEndpoint) => wh.url === webhookUrl && wh.status === 'enabled');
 
     if (found) {
       console.log(`[STRIPE] Webhook already registered: ${webhookUrl}`);

@@ -168,6 +168,18 @@ const ownerSettingsSchema = new Schema<OwnerSettingsRecord>({
   phone: { type: String, required: true },
 });
 
+// ─── Counter Schema (atomic booking IDs) ─────────────────────────────────────
+
+interface CounterDoc {
+  _id: string;
+  seq: number;
+}
+
+const counterSchema = new Schema<CounterDoc>({
+  _id: { type: String },
+  seq: { type: Number, required: true, default: 0 },
+});
+
 // ─── Models ───────────────────────────────────────────────────────────────────
 
 export const PropertyModel: Model<Property> =
@@ -199,6 +211,17 @@ export const ChatSessionModel: Model<ChatSessionRecord> =
 export const OwnerSettingsModel: Model<OwnerSettingsRecord> =
   mongoose.models.OwnerSettings ||
   mongoose.model<OwnerSettingsRecord>('OwnerSettings', ownerSettingsSchema);
+export const CounterModel: Model<CounterDoc> =
+  mongoose.models.Counter || mongoose.model<CounterDoc>('Counter', counterSchema);
+
+export async function nextBookingId(): Promise<string> {
+  const counter = await CounterModel.findOneAndUpdate(
+    { _id: 'booking' },
+    { $inc: { seq: 1 } },
+    { upsert: true, returnDocument: 'after' },
+  );
+  return `BOOK_${String(counter!.seq).padStart(3, '0')}`;
+}
 
 // ─── Connection ───────────────────────────────────────────────────────────────
 
@@ -247,6 +270,7 @@ export async function seed(): Promise<void> {
     ConversationModel.deleteMany({}),
     ChatSessionModel.deleteMany({}),
     OwnerSettingsModel.deleteMany({}),
+    CounterModel.deleteMany({}),
   ]);
 
   // ── Properties ────────────────────────────────────────────────────────────
@@ -504,6 +528,9 @@ export async function seed(): Promise<void> {
       schedule: allDays(0, 24),
     },
   ]);
+
+  // Initialize booking counter past seeded bookings (BOOK_001–BOOK_005)
+  await CounterModel.create({ _id: 'booking', seq: 100 });
 
   // Reset SSE sequence counter
   resetSSESequence();
