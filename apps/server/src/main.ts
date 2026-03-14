@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import type { IncomingEvent, DemoEvent, SurgeWebhookPayload } from '@apm/shared';
-import { AGENT_CONFIG } from '@apm/shared';
+import { AGENT_CONFIG, PROVIDERS } from '@apm/shared';
 import { connectDB, seed } from './shared/db.js';
 import { addClient, emitSSE } from './shared/sse.js';
 import {
@@ -236,13 +236,20 @@ app.get('/provider', (_req, res) => {
   res.json(getProviderConfig());
 });
 
-// POST /provider
+// POST /provider — toggle or explicit switch
 app.post('/provider', (req, res) => {
-  const { provider, model } = req.body;
+  let { provider, model } = req.body || {};
 
+  // If no body, toggle to the other provider
   if (!provider || !model) {
-    res.status(400).json({ error: 'Missing provider or model' });
-    return;
+    const current = getProviderConfig();
+    if (current.provider === 'anthropic') {
+      provider = PROVIDERS.CEREBRAS.provider;
+      model = PROVIDERS.CEREBRAS.model;
+    } else {
+      provider = PROVIDERS.ANTHROPIC.provider;
+      model = PROVIDERS.ANTHROPIC.model;
+    }
   }
 
   if (provider !== 'anthropic' && provider !== 'cerebras') {
@@ -251,7 +258,8 @@ app.post('/provider', (req, res) => {
   }
 
   setProvider({ provider, model });
-  res.json({ status: 'ok', provider: getProviderConfig() });
+  const config = getProviderConfig();
+  res.json({ status: 'ok', provider: config.provider, model: config.model });
 });
 
 // ─── Startup ────────────────────────────────────────────────────────────────
