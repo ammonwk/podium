@@ -1,7 +1,7 @@
 import type { LLMMessage } from '@apm/shared';
 import { ConversationModel } from './db.js';
 
-export type ConversationType = 'demo' | 'caller';
+export type ConversationType = 'demo' | 'caller' | 'proactive';
 
 export interface ConversationLane {
   id: string;

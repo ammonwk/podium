@@ -39,6 +39,7 @@ import { ALL_TOOLS, CHAT_BOOKING_TOOLS, CHAT_OWNER_TOOLS, CHAT_OCCUPANT_TOOLS, N
 import { normalizePhone } from './shared/phone-utils.js';
 import { executeCreateBooking } from './tools/create-booking.js';
 import { BookingModel, PropertyModel, ScheduleEventModel } from './shared/db.js';
+import { startProactiveLoops, resetProactiveState } from './proactive/proactive-loops.js';
 
 // ─── Express App ──────────────────────────────────────────────────────────────
 
@@ -46,6 +47,7 @@ const app = express();
 
 // Per-session mutex to prevent concurrent runLoop executions from clobbering history
 const sessionLocks = new Map<string, Promise<void>>();
+let proactiveHandle: { stopAll: () => void } | null = null;
 app.use(cors());
 app.use(express.json());
 
@@ -517,6 +519,10 @@ app.post('/reset', async (_req, res) => {
   try {
     console.log('[RESET] Resetting server state...');
 
+    // Stop proactive loops
+    if (proactiveHandle) proactiveHandle.stopAll();
+    resetProactiveState();
+
     // Cancel all pending tasks
     cancelAllTasks();
 
@@ -535,6 +541,11 @@ app.post('/reset', async (_req, res) => {
 
     // Notify connected clients
     emitSSE('reset', { message: 'Server state reset' });
+
+    // Restart proactive loops after reset
+    proactiveHandle = startProactiveLoops((event, laneId, laneType) => {
+      enqueueEvent(event, laneId, laneType);
+    });
 
     console.log('[RESET] Complete');
     res.json({ status: 'reset' });
@@ -729,6 +740,11 @@ async function start(): Promise<void> {
       console.log(`  http://localhost:${PORT}`);
       console.log(`  Provider: ${getProviderConfig().provider} (${getProviderConfig().model})`);
       console.log(`========================================\n`);
+    });
+
+    // Start proactive autonomy loops (morning briefing, Ticketmaster polling, checkout follow-ups)
+    proactiveHandle = startProactiveLoops((event, laneId, laneType) => {
+      enqueueEvent(event, laneId, laneType);
     });
   } catch (err) {
     console.error('[STARTUP] Fatal error:', err);

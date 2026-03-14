@@ -302,4 +302,6 @@ export const AGENT_CONFIG = {
   MAX_SCHEDULE_DELAY_MINUTES: 60,
   SMS_RATE_LIMIT_MS: 2_000,
   DEMO_EVENT_PAUSE_MS: 3000,
+  PROACTIVE_POLL_INTERVAL_MS: 3 * 60 * 1000,  // 3 min for demo
+  PROACTIVE_STARTUP_DELAY_MS: 5_000,           // 5s after startup
 } as const;

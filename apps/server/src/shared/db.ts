@@ -122,7 +122,7 @@ const sseEventLogSchema = new Schema<SSEEventLogRecord>({
 
 export interface ConversationRecord {
   lane_id: string;
-  lane_type: 'demo' | 'caller';
+  lane_type: 'demo' | 'caller' | 'proactive';
   history: LLMMessage[];
   created_at: string;
   updated_at: string;
@@ -130,7 +130,7 @@ export interface ConversationRecord {
 
 const conversationSchema = new Schema<ConversationRecord>({
   lane_id: { type: String, required: true, unique: true },
-  lane_type: { type: String, enum: ['demo', 'caller'], required: true },
+  lane_type: { type: String, enum: ['demo', 'caller', 'proactive'], required: true },
   history: { type: Schema.Types.Mixed, required: true },
   created_at: { type: String, required: true },
   updated_at: { type: String, required: true },
