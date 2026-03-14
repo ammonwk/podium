@@ -25,11 +25,35 @@ export const MiniCalendar: React.FC<Props> = ({ bookings, currentPrice, basePric
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
   const today = new Date();
-  const year = today.getFullYear();
-  const month = today.getMonth();
-  const todayDate = today.getDate();
+  const [viewYear, setViewYear] = useState(today.getFullYear());
+  const [viewMonth, setViewMonth] = useState(today.getMonth());
+
+  const year = viewYear;
+  const month = viewMonth;
+  const isCurrentMonth = year === today.getFullYear() && month === today.getMonth();
+  const todayDate = isCurrentMonth ? today.getDate() : -1;
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDay = new Date(year, month, 1).getDay();
+
+  const goToPrevMonth = () => {
+    setSelectedDay(null);
+    if (viewMonth === 0) {
+      setViewMonth(11);
+      setViewYear(viewYear - 1);
+    } else {
+      setViewMonth(viewMonth - 1);
+    }
+  };
+
+  const goToNextMonth = () => {
+    setSelectedDay(null);
+    if (viewMonth === 11) {
+      setViewMonth(0);
+      setViewYear(viewYear + 1);
+    } else {
+      setViewMonth(viewMonth + 1);
+    }
+  };
 
   // Map each day -> booking (if any)
   const dayBookingMap = new Map<number, BookingRange>();
@@ -67,15 +91,62 @@ export const MiniCalendar: React.FC<Props> = ({ bookings, currentPrice, basePric
       width: gridWidth,
       fontFamily: THEME.font.sans,
     }}>
-      {/* Month header */}
+      {/* Month header with navigation */}
       <div style={{
-        textAlign: 'center',
-        fontSize: compact ? 16 : 13,
-        fontWeight: 700,
-        color: THEME.text.accent,
-        letterSpacing: '-0.01em',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
       }}>
-        {compact ? MONTH_NAMES[month].substring(0, 3) : MONTH_NAMES[month]} {year}
+        <div
+          onClick={goToPrevMonth}
+          style={{
+            width: compact ? 28 : 22,
+            height: compact ? 28 : 22,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            borderRadius: '4px',
+            fontSize: compact ? 20 : 18,
+            fontWeight: 700,
+            color: THEME.text.muted,
+            userSelect: 'none',
+            transition: 'color 0.15s ease',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = THEME.text.accent)}
+          onMouseLeave={(e) => (e.currentTarget.style.color = THEME.text.muted)}
+        >
+          ‹
+        </div>
+        <div style={{
+          fontSize: compact ? 16 : 13,
+          fontWeight: 700,
+          color: THEME.text.accent,
+          letterSpacing: '-0.01em',
+        }}>
+          {compact ? MONTH_NAMES[month].substring(0, 3) : MONTH_NAMES[month]} {year}
+        </div>
+        <div
+          onClick={goToNextMonth}
+          style={{
+            width: compact ? 28 : 22,
+            height: compact ? 28 : 22,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            borderRadius: '4px',
+            fontSize: compact ? 20 : 18,
+            fontWeight: 700,
+            color: THEME.text.muted,
+            userSelect: 'none',
+            transition: 'color 0.15s ease',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = THEME.text.accent)}
+          onMouseLeave={(e) => (e.currentTarget.style.color = THEME.text.muted)}
+        >
+          ›
+        </div>
       </div>
 
       {/* Day-of-week headers */}
