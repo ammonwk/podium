@@ -1,17 +1,22 @@
 import type { GetPropertyStatusInput, PropertyStatusResult, PropertyStatusEntry } from '@apm/shared';
+import { BOOKING_TIMES } from '@apm/shared';
 import { PropertyModel, BookingModel, ScheduleEventModel } from '../shared/db.js';
+import { normalizeCheckIn, normalizeCheckOut } from '../shared/booking-dates.js';
 
 export async function executeGetPropertyStatus(
   input: GetPropertyStatusInput,
 ): Promise<PropertyStatusResult> {
   const { property_id, check_availability_start, check_availability_end } = input;
 
-  // Defaults: today → 30 days out
+  // Defaults: today → 30 days out, aligned to check-in/check-out times
   const now = new Date();
-  const windowStart = check_availability_start ? new Date(check_availability_start) : now;
-  const defaultEnd = new Date(now);
-  defaultEnd.setDate(defaultEnd.getDate() + 30);
-  const windowEnd = check_availability_end ? new Date(check_availability_end) : defaultEnd;
+  const todayStr = now.toISOString().slice(0, 10);
+  const defaultEndDate = new Date(now);
+  defaultEndDate.setDate(defaultEndDate.getDate() + 30);
+  const endStr = defaultEndDate.toISOString().slice(0, 10);
+
+  const windowStart = new Date(normalizeCheckIn(check_availability_start || todayStr));
+  const windowEnd = new Date(normalizeCheckOut(check_availability_end || endStr));
 
   // Query properties
   const filter = property_id ? { id: property_id } : {};
@@ -53,8 +58,9 @@ export async function executeGetPropertyStatus(
 
     for (const range of bookedRanges) {
       if (cursor < range.start) {
+        // Window starts at check-in time (cursor) and ends at the booking's check-in (which is check-in time)
         const gapEnd = range.start < windowEnd ? range.start : windowEnd;
-        const days = Math.floor(
+        const days = Math.round(
           (gapEnd.getTime() - cursor.getTime()) / (1000 * 60 * 60 * 24),
         );
         if (days > 0) {
@@ -65,14 +71,17 @@ export async function executeGetPropertyStatus(
           });
         }
       }
+      // After a booking ends (check-out time), next available is check-in time same day
       if (range.end > cursor) {
-        cursor = new Date(range.end);
+        // Align cursor to check-in time on the checkout date
+        const checkoutDate = range.end.toISOString().slice(0, 10);
+        cursor = new Date(normalizeCheckIn(checkoutDate));
       }
     }
 
     // Gap after the last booking
     if (cursor < windowEnd) {
-      const days = Math.floor(
+      const days = Math.round(
         (windowEnd.getTime() - cursor.getTime()) / (1000 * 60 * 60 * 24),
       );
       if (days > 0) {

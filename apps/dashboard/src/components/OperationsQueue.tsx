@@ -99,12 +99,6 @@ function formatElapsed(seconds: number): string {
   return `${mins}m ${secs}s`;
 }
 
-function hexToRgbValues(hex: string): string {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  if (!result) return '107,114,128';
-  return `${parseInt(result[1], 16)},${parseInt(result[2], 16)},${parseInt(result[3], 16)}`;
-}
-
 function generateSummary(toolCalls: ToolCallData[]): string {
   const parts: string[] = [];
   for (const tc of toolCalls) {
@@ -142,22 +136,18 @@ function generateSummary(toolCalls: ToolCallData[]): string {
   return `${parts[0]}. ${parts[1]}. +${parts.length - 2} more.`;
 }
 
-/** Derive display name from event name — strip "Inbound SMS from" prefix, use name part */
 function deriveDisplayName(event: EventState): string {
   const name = event.name;
-  // Pattern: "Name: Description" (e.g., "Sarah: Late Checkout")
   const colonIdx = name.indexOf(':');
   if (colonIdx > 0 && colonIdx < 20) {
     return name.substring(0, colonIdx);
   }
-  // Pattern: "Inbound SMS from +1..."
   if (name.startsWith('Inbound SMS from ')) {
     return name.substring(17);
   }
   return name;
 }
 
-/** Derive a short description from the event */
 function deriveDescription(event: EventState): string {
   const name = event.name;
   const colonIdx = name.indexOf(':');
@@ -173,7 +163,6 @@ function deriveLanes(events: EventState[]): LaneState[] {
   const laneMap = new Map<string, LaneState>();
 
   for (const ev of events) {
-    // Group by conversationId if available, otherwise by event name
     const laneId = ev.conversationId || ev.name;
 
     let lane = laneMap.get(laneId);
@@ -199,22 +188,18 @@ function deriveLanes(events: EventState[]): LaneState[] {
     lane.events.push(ev);
     lane.allToolCalls.push(...ev.toolCalls);
 
-    // Update lane status: active > queued > done
     if (ev.status === 'active') {
       lane.status = 'active';
       lane.currentEvent = ev;
     } else if (ev.status === 'queued' && lane.status !== 'active') {
       lane.status = 'queued';
     }
-    // Done only if all events in lane are done (default stays from init)
 
-    // Track trigger from first event if not set
     if (!lane.triggerPreview && ev.triggerMessage) {
       lane.triggerPreview = ev.triggerMessage.body;
       lane.triggerFrom = ev.triggerMessage.name || ev.triggerMessage.from;
     }
 
-    // Track timing
     if (ev.startedAt && (!lane.startedAt || ev.startedAt < lane.startedAt)) {
       lane.startedAt = ev.startedAt;
     }
@@ -224,7 +209,6 @@ function deriveLanes(events: EventState[]): LaneState[] {
     }
   }
 
-  // Finalize: compute elapsed, confirm done status
   for (const lane of laneMap.values()) {
     if (lane.events.every(ev => ev.status === 'done')) {
       lane.status = 'done';
@@ -233,16 +217,13 @@ function deriveLanes(events: EventState[]): LaneState[] {
     lane.elapsedSeconds = getElapsedSeconds(lane.startedAt, lastEvent?.completedAt);
   }
 
-  // Sort: active first, then queued, then done (most recent first within done)
   const lanes = Array.from(laneMap.values());
   lanes.sort((a, b) => {
     const order = { active: 0, queued: 1, done: 2 };
     if (order[a.status] !== order[b.status]) return order[a.status] - order[b.status];
-    // Within same status, sort by startedAt (newer active on top for visibility)
     if (a.status === 'active') {
       return (b.startedAt || '').localeCompare(a.startedAt || '');
     }
-    // Done: most recent first
     if (a.status === 'done') {
       return (b.lastActivityAt || '').localeCompare(a.lastActivityAt || '');
     }
@@ -263,14 +244,13 @@ export const OperationsQueue: React.FC<Props> = ({
 }) => {
   const feedRef = useRef<HTMLDivElement>(null);
   const [expandedLaneId, setExpandedLaneId] = useState<string | null>(null);
-  const [doneCollapsed, setDoneCollapsed] = useState(true);
+  const [showAllDone, setShowAllDone] = useState(false);
 
   useEffect(() => { injectKeyframes(); }, []);
 
-  // Derive lanes from events
   const lanes = useMemo(() => deriveLanes(events), [events]);
 
-  // Tick for elapsed time on active lanes
+  // Tick for active lane elapsed times
   const [, setTick] = useState(0);
   const hasActive = lanes.some(l => l.status === 'active');
   useEffect(() => {
@@ -282,150 +262,172 @@ export const OperationsQueue: React.FC<Props> = ({
   const activeLanes = useMemo(() => lanes.filter(l => l.status === 'active'), [lanes]);
   const queuedLanes = useMemo(() => lanes.filter(l => l.status === 'queued'), [lanes]);
   const doneLanes = useMemo(() => lanes.filter(l => l.status === 'done'), [lanes]);
-  const visibleDone = doneCollapsed ? doneLanes.slice(0, 5) : doneLanes;
+
+  // Show all done if there are few, otherwise cap and let user expand
+  const DONE_CAP = 8;
+  const visibleDone = showAllDone ? doneLanes : doneLanes.slice(0, DONE_CAP);
   const hiddenDoneCount = doneLanes.length - visibleDone.length;
+  const hasActiveOrQueued = activeLanes.length > 0 || queuedLanes.length > 0;
 
   const pendingTasks = useMemo(
     () => upcomingTasks.filter(t => t.status === 'pending'),
     [upcomingTasks],
   );
 
-  const toggleExpand = useCallback((laneId: string) => {
+  const selectLane = useCallback((laneId: string) => {
     setExpandedLaneId(prev => prev === laneId ? null : laneId);
   }, []);
 
-  // ─── Count badge text ──────────────────────────────────────────────────────
-
+  // Count badge
   const countParts: string[] = [];
   if (activeLanes.length > 0) countParts.push(`${activeLanes.length} active`);
   if (queuedLanes.length > 0) countParts.push(`${queuedLanes.length} queued`);
   if (doneLanes.length > 0) countParts.push(`${doneLanes.length} done`);
   const countLabel = countParts.length > 0 ? countParts.join(' \u00B7 ') : 'No activity';
 
+  const selectedLane = expandedLaneId ? lanes.find(l => l.id === expandedLaneId) || null : null;
+
   return (
     <div style={containerStyle}>
-      {/* Header */}
-      <div style={headerStyle}>
-        <div style={headerRowStyle}>
-          <div style={headerLeftStyle}>
-            {isProcessing && (
+      {/* Left: Lane List */}
+      <div style={listColumnStyle}>
+        {/* Header */}
+        <div style={headerStyle}>
+          <div style={headerRowStyle}>
+            <div style={headerLeftStyle}>
+              {isProcessing && (
+                <span style={{
+                  width: 8, height: 8, borderRadius: '50%',
+                  backgroundColor: THEME.accent.violet,
+                  flexShrink: 0, animation: 'breathe 2s ease-in-out infinite',
+                }} />
+              )}
               <span style={{
-                width: 8, height: 8, borderRadius: '50%',
-                backgroundColor: THEME.accent.violet,
-                flexShrink: 0, animation: 'breathe 2s ease-in-out infinite',
-              }} />
-            )}
-            <span style={{
-              fontSize: 18, fontWeight: 700, color: THEME.text.accent,
-              fontFamily: THEME.font.sans, letterSpacing: '-0.01em',
-            }}>
-              Live Activity
+                fontSize: 18, fontWeight: 700, color: THEME.text.accent,
+                fontFamily: THEME.font.sans, letterSpacing: '-0.01em',
+              }}>
+                Live Activity
+              </span>
+            </div>
+            <span style={countBadgeStyle}>
+              {countLabel}
             </span>
           </div>
-          <span style={{
-            fontSize: 13, fontWeight: 600, color: THEME.text.muted,
-            backgroundColor: THEME.bg.primary, padding: '4px 12px',
-            borderRadius: RADIUS.full, whiteSpace: 'nowrap' as const,
-            fontFamily: THEME.font.sans,
-          }}>
-            {countLabel}
-          </span>
+        </div>
+
+        {/* Scrollable Feed */}
+        <div ref={feedRef} style={feedStyle}>
+          {lanes.length === 0 ? (
+            <div style={emptyStateStyle}>
+              <div style={{ fontSize: 40, lineHeight: '1', marginBottom: 8, animation: 'fadeIn 0.6s ease-out both' }}>
+                {'🏠'}
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: THEME.text.primary, fontFamily: THEME.font.sans, animation: 'fadeIn 0.6s ease-out 0.1s both' }}>
+                Your AI assistant is ready
+              </div>
+              <div style={{ fontSize: 14, color: THEME.text.muted, fontFamily: THEME.font.sans, animation: 'fadeIn 0.6s ease-out 0.2s both' }}>
+                Run the demo to see it in action
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Active Lanes */}
+              {activeLanes.map((lane, idx) => (
+                <ActiveLaneRow
+                  key={lane.id}
+                  lane={lane}
+                  index={idx}
+                  isSelected={expandedLaneId === lane.id}
+                  onSelect={() => selectLane(lane.id)}
+                  onToolCardClick={onToolCardClick}
+                  onEventClick={onEventClick}
+                />
+              ))}
+
+              {/* Queued Lanes */}
+              {queuedLanes.length > 0 && (
+                <>
+                  {activeLanes.length > 0 && <SectionDivider label={`queued (${queuedLanes.length})`} />}
+                  {queuedLanes.map((lane, idx) => (
+                    <QueuedLaneRow key={lane.id} lane={lane} index={idx} />
+                  ))}
+                </>
+              )}
+
+              {/* Done Lanes */}
+              {doneLanes.length > 0 && (
+                <>
+                  {hasActiveOrQueued && <SectionDivider label={`completed (${doneLanes.length})`} />}
+                  {visibleDone.map((lane, idx) => (
+                    <DoneLaneRow
+                      key={lane.id}
+                      lane={lane}
+                      index={idx}
+                      isSelected={expandedLaneId === lane.id}
+                      onSelect={() => selectLane(lane.id)}
+                      onToolCardClick={onToolCardClick}
+                      onEventClick={onEventClick}
+                    />
+                  ))}
+                  {hiddenDoneCount > 0 && (
+                    <button
+                      onClick={() => setShowAllDone(prev => !prev)}
+                      style={showMoreStyle}
+                    >
+                      {showAllDone ? 'Show less' : `Show ${hiddenDoneCount} more`}
+                    </button>
+                  )}
+                </>
+              )}
+
+              {/* Upcoming Tasks */}
+              {pendingTasks.length > 0 && (
+                <>
+                  <SectionDivider label="upcoming" />
+                  {pendingTasks.map(task => (
+                    <div key={task.task_id} style={taskRowStyle}>
+                      <span style={taskDescStyle}>{task.description}</span>
+                      <span style={taskTimeStyle}>{getCountdown(task.fires_at)}</span>
+                    </div>
+                  ))}
+                </>
+              )}
+            </>
+          )}
         </div>
       </div>
 
-      {/* Scrollable Feed */}
-      <div ref={feedRef} style={feedStyle}>
-        {lanes.length === 0 ? (
-          <div style={emptyStateStyle}>
-            <div style={{ fontSize: 40, lineHeight: '1', marginBottom: 8, animation: 'fadeIn 0.6s ease-out both' }}>
-              {'🏠'}
-            </div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: THEME.text.primary, fontFamily: THEME.font.sans, animation: 'fadeIn 0.6s ease-out 0.1s both' }}>
-              Your AI assistant is ready
-            </div>
-            <div style={{ fontSize: 14, color: THEME.text.muted, fontFamily: THEME.font.sans, animation: 'fadeIn 0.6s ease-out 0.2s both' }}>
-              Run the demo to see it in action
-            </div>
-          </div>
-        ) : (
-          <>
-            {/* Active Lanes */}
-            {activeLanes.length > 0 && (
-              <>
-                {activeLanes.map((lane, idx) => (
-                  <LaneRow
-                    key={lane.id}
-                    lane={lane}
-                    index={idx}
-                    isExpanded={expandedLaneId === lane.id}
-                    onToggleExpand={() => toggleExpand(lane.id)}
-                    onToolCardClick={onToolCardClick}
-                    onEventClick={onEventClick}
-                  />
-                ))}
-              </>
-            )}
-
-            {/* Queued Lanes */}
-            {queuedLanes.length > 0 && (
-              <>
-                {activeLanes.length > 0 && <SectionDivider label={`queued (${queuedLanes.length})`} />}
-                {queuedLanes.map((lane, idx) => (
-                  <LaneRow
-                    key={lane.id}
-                    lane={lane}
-                    index={idx}
-                    isExpanded={expandedLaneId === lane.id}
-                    onToggleExpand={() => toggleExpand(lane.id)}
-                    onToolCardClick={onToolCardClick}
-                    onEventClick={onEventClick}
-                  />
-                ))}
-              </>
-            )}
-
-            {/* Done Lanes */}
-            {doneLanes.length > 0 && (
-              <>
-                <SectionDivider label={`completed (${doneLanes.length})`} />
-                {visibleDone.map((lane, idx) => (
-                  <LaneRow
-                    key={lane.id}
-                    lane={lane}
-                    index={idx}
-                    isExpanded={expandedLaneId === lane.id}
-                    onToggleExpand={() => toggleExpand(lane.id)}
-                    onToolCardClick={onToolCardClick}
-                    onEventClick={onEventClick}
-                  />
-                ))}
-                {hiddenDoneCount > 0 && (
-                  <button
-                    onClick={() => setDoneCollapsed(prev => !prev)}
-                    style={showMoreStyle}
-                  >
-                    {doneCollapsed ? `Show ${hiddenDoneCount} more` : 'Show less'}
-                  </button>
-                )}
-              </>
-            )}
-
-            {/* Upcoming Tasks */}
-            {pendingTasks.length > 0 && (
-              <>
-                <SectionDivider label="upcoming" />
-                {pendingTasks.map(task => (
-                  <div key={task.task_id} style={taskRowStyle}>
-                    <span style={taskDescStyle}>{task.description}</span>
-                    <span style={taskTimeStyle}>
-                      {getCountdown(task.fires_at)}
-                    </span>
-                  </div>
-                ))}
-              </>
-            )}
-          </>
-        )}
+      {/* Right: Detail Panel (always rendered, width transitions) */}
+      <div style={{
+        ...detailWrapperBase,
+        width: selectedLane ? DETAIL_WIDTH : 0,
+        marginLeft: selectedLane ? DETAIL_GAP : 0,
+        opacity: selectedLane ? 1 : 0,
+      }}>
+        <div style={detailPanelInnerStyle}>
+          {selectedLane && (
+            <>
+              <div style={detailPanelHeaderStyle}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {selectedLane.status === 'active' && <span style={activeDotStyle} />}
+                  {selectedLane.status === 'done' && <span style={checkmarkStyle}>{'\u2713'}</span>}
+                  <span style={{ fontSize: 15, fontWeight: 700, color: THEME.text.accent, fontFamily: THEME.font.sans }}>
+                    {selectedLane.displayName}
+                  </span>
+                  {selectedLane.type === 'caller' && <span style={smsBadgeStyle}>SMS</span>}
+                </div>
+                <button style={detailCloseStyle} onClick={() => setExpandedLaneId(null)}>&times;</button>
+              </div>
+              <div style={detailPanelBodyStyle}>
+                <ExpandedDetail
+                  lane={selectedLane}
+                  isActive={selectedLane.status === 'active'}
+                  onToolCardClick={onToolCardClick}
+                />
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -441,180 +443,190 @@ const SectionDivider: React.FC<{ label: string }> = ({ label }) => (
   </div>
 );
 
-// ─── Lane Row ────────────────────────────────────────────────────────────────
+// ─── Active Lane Row (2-line: name+preview, with action chain) ───────────────
 
-const LaneRow: React.FC<{
+const ActiveLaneRow: React.FC<{
   lane: LaneState;
   index: number;
-  isExpanded: boolean;
-  onToggleExpand: () => void;
+  isSelected: boolean;
+  onSelect: () => void;
   onToolCardClick: (toolCall: ToolCallData) => void;
   onEventClick: (event: EventState) => void;
-}> = React.memo(({ lane, index, isExpanded, onToggleExpand, onToolCardClick, onEventClick }) => {
-  const [hovered, setHovered] = useState(false);
-  const isActive = lane.status === 'active';
-  const isDone = lane.status === 'done';
-  const isQueued = lane.status === 'queued';
-
-  const elapsed = isActive
-    ? getElapsedSeconds(lane.startedAt)
-    : lane.elapsedSeconds;
-
-  const summary = isDone ? generateSummary(lane.allToolCalls) : '';
+}> = React.memo(({ lane, index, isSelected, onSelect }) => {
+  const elapsed = getElapsedSeconds(lane.startedAt);
   const description = lane.events.length > 0 ? deriveDescription(lane.events[0]) : '';
 
   return (
     <div
       style={{
-        ...laneBaseStyle,
+        ...cardStyle,
+        borderLeft: `3px solid ${THEME.accent.violet}`,
         animation: `slideInFromBelow 0.25s ${ANIMATION.easeOut} both`,
         animationDelay: `${Math.min(index, 15) * 40}ms`,
-        ...(isActive ? {
-          borderLeft: `3px solid ${THEME.accent.violet}`,
-        } : isDone ? {
-          borderLeft: '3px solid transparent',
-          opacity: hovered ? 1 : 0.8,
-        } : {
-          borderLeft: `3px solid ${THEME.bg.border}`,
-          opacity: 0.7,
-        }),
-        ...(hovered && !isQueued ? {
-          backgroundColor: THEME.bg.cardHover,
-        } : {}),
+        ...(isSelected ? selectedCardStyle : {}),
       }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onClick={onToggleExpand}
+      onClick={onSelect}
     >
-      {/* ── Compact Row ── */}
-      <div style={laneCompactStyle}>
-        {/* Left: status + name */}
-        <div style={laneLeftStyle}>
-          {isDone ? (
-            <span style={checkmarkStyle}>{'\u2713'}</span>
-          ) : isActive ? (
-            <span style={activeDotStyle} />
-          ) : (
-            <span style={queuedDotStyle} />
-          )}
-          <div style={laneNameBlockStyle}>
-            <div style={laneNameRowStyle}>
-              <span style={{
-                ...laneNameStyle,
-                color: isQueued ? THEME.text.muted : THEME.text.accent,
-              }}>
-                {lane.displayName}
-              </span>
-              {lane.type === 'caller' && (
-                <span style={callerBadgeStyle}>SMS</span>
-              )}
-              {lane.events[0]?.source === 'system' && (
-                <span style={systemBadgeStyle}>System</span>
-              )}
-              {lane.events[0]?.source === 'self-scheduled' && (
-                <span style={selfBadgeStyle}>Self</span>
-              )}
-            </div>
-            {/* Trigger preview or description */}
-            <span style={lanePreviewStyle}>
-              {lane.triggerPreview
-                ? `"${lane.triggerPreview.length > 60 ? lane.triggerPreview.slice(0, 60) + '...' : lane.triggerPreview}"`
-                : description}
-            </span>
-          </div>
-        </div>
-
-        {/* Center: action chain */}
-        <div style={laneCenterStyle}>
-          <ActionChain
-            toolCalls={lane.allToolCalls}
-            isActive={isActive}
-            currentEvent={lane.currentEvent}
-          />
-        </div>
-
-        {/* Right: meta */}
-        <div style={laneRightStyle}>
-          {isQueued ? (
-            <span style={queuedLabelStyle}>queued</span>
-          ) : (
-            <>
-              <span style={{
-                ...elapsedStyle,
-                color: isActive ? THEME.accent.violet : THEME.text.muted,
-              }}>
-                {formatElapsed(elapsed)}
-              </span>
-              {isDone && lane.allToolCalls.length > 0 && (
-                <span style={actCountStyle}>
-                  {lane.allToolCalls.length} act{lane.allToolCalls.length !== 1 ? 's' : ''}
-                </span>
-              )}
-            </>
-          )}
-        </div>
+      {/* Row 1: status + name + chain + time */}
+      <div style={rowStyle}>
+        <span style={activeDotStyle} />
+        <span style={nameStyle}>{lane.displayName}</span>
+        {lane.type === 'caller' && <span style={smsBadgeStyle}>SMS</span>}
+        {lane.events[0]?.source === 'system' && <span style={systemBadgeStyle}>System</span>}
+        <div style={{ flex: 1 }} />
+        <ActionChain toolCalls={lane.allToolCalls} isActive currentEvent={lane.currentEvent} />
+        <span style={{ ...metaStyle, color: THEME.accent.violet }}>{formatElapsed(elapsed)}</span>
       </div>
 
-      {/* ── Done summary (inline, not expanded) ── */}
-      {isDone && summary && !isExpanded && (
-        <div style={doneSummaryStyle}>{summary}</div>
-      )}
-
-      {/* ── Expanded Detail ── */}
-      {isExpanded && (
-        <div style={expandedStyle} onClick={(e) => e.stopPropagation()}>
-          {/* Trigger message */}
-          {lane.triggerPreview && (
-            <div style={triggerBubbleStyle}>
-              <span style={{ fontSize: 13, flexShrink: 0, color: TOOL_COLORS.send_sms || '#3B82F6', fontWeight: 700 }}>
-                SMS
-              </span>
-              <div style={{ minWidth: 0 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: THEME.text.secondary, fontFamily: THEME.font.sans }}>
-                  {lane.triggerFrom || 'Guest'}:
-                </span>
-                <span style={{ fontSize: 14, color: THEME.text.primary, fontFamily: THEME.font.sans, lineHeight: '1.5', marginLeft: 4 }}>
-                  &ldquo;{lane.triggerPreview}&rdquo;
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Reasoning */}
-          {lane.currentEvent?.thinkingText && (
-            <ReasoningExpander
-              text={lane.currentEvent.thinkingText}
-              isStreaming={isActive}
-            />
-          )}
-
-          {/* Tool cards */}
-          {lane.allToolCalls.length > 0 && (
-            <div style={toolCardsStyle}>
-              {lane.allToolCalls.map((tc, i) => (
-                <ToolCard
-                  key={tc.id}
-                  toolCall={tc}
-                  index={i}
-                  onClick={() => onToolCardClick(tc)}
-                />
-              ))}
-            </div>
-          )}
-
-          {/* Summary for done lanes */}
-          {isDone && summary && (
-            <div style={{ ...doneSummaryStyle, paddingLeft: 0 }}>
-              {summary}
-            </div>
-          )}
+      {/* Row 2: trigger preview */}
+      {lane.triggerPreview && (
+        <div style={previewRowStyle}>
+          &ldquo;{lane.triggerPreview.length > 80 ? lane.triggerPreview.slice(0, 80) + '...' : lane.triggerPreview}&rdquo;
         </div>
+      )}
+      {!lane.triggerPreview && description && (
+        <div style={previewRowStyle}>{description}</div>
       )}
     </div>
   );
 });
+ActiveLaneRow.displayName = 'ActiveLaneRow';
 
-LaneRow.displayName = 'LaneRow';
+// ─── Queued Lane Row (single line, muted) ────────────────────────────────────
+
+const QueuedLaneRow: React.FC<{
+  lane: LaneState;
+  index: number;
+}> = React.memo(({ lane, index }) => (
+  <div
+    style={{
+      ...cardStyle,
+      borderLeft: `3px solid ${THEME.bg.border}`,
+      opacity: 0.65,
+      padding: '7px 14px',
+      animation: `slideInFromBelow 0.25s ${ANIMATION.easeOut} both`,
+      animationDelay: `${Math.min(index, 15) * 40}ms`,
+    }}
+  >
+    <div style={rowStyle}>
+      <span style={queuedDotStyle} />
+      <span style={{ ...nameStyle, color: THEME.text.muted }}>{lane.displayName}</span>
+      {lane.type === 'caller' && <span style={smsBadgeStyle}>SMS</span>}
+      <div style={{ flex: 1 }} />
+      <span style={queuedLabelStyle}>queued</span>
+    </div>
+  </div>
+));
+QueuedLaneRow.displayName = 'QueuedLaneRow';
+
+// ─── Done Lane Row (single line, compact, with action chain) ─────────────────
+
+const DoneLaneRow: React.FC<{
+  lane: LaneState;
+  index: number;
+  isSelected: boolean;
+  onSelect: () => void;
+  onToolCardClick: (toolCall: ToolCallData) => void;
+  onEventClick: (event: EventState) => void;
+}> = React.memo(({ lane, index, isSelected, onSelect }) => {
+  const summary = generateSummary(lane.allToolCalls);
+
+  return (
+    <div
+      style={{
+        ...cardStyle,
+        padding: '8px 14px',
+        animation: `slideInFromBelow 0.2s ${ANIMATION.easeOut} both`,
+        animationDelay: `${Math.min(index, 20) * 30}ms`,
+        ...(isSelected ? selectedCardStyle : {}),
+      }}
+      onClick={onSelect}
+    >
+      {/* Row: ✓ Name SMS  ●━●━●  8s · 3 acts */}
+      <div style={rowStyle}>
+        <span style={checkmarkStyle}>{'\u2713'}</span>
+        <span style={nameStyle}>{lane.displayName}</span>
+        {lane.type === 'caller' && <span style={smsBadgeStyle}>SMS</span>}
+        {lane.events[0]?.source === 'system' && <span style={systemBadgeStyle}>System</span>}
+
+        {/* Summary fills the middle */}
+        <span style={doneSummaryInlineStyle}>
+          {summary}
+        </span>
+
+        <ActionChain toolCalls={lane.allToolCalls} isActive={false} currentEvent={null} />
+        <span style={metaStyle}>{formatElapsed(lane.elapsedSeconds)}</span>
+        {lane.allToolCalls.length > 0 && (
+          <span style={actCountStyle}>
+            {lane.allToolCalls.length} act{lane.allToolCalls.length !== 1 ? 's' : ''}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+});
+DoneLaneRow.displayName = 'DoneLaneRow';
+
+// ─── Expanded Detail (shared by active + done) ──────────────────────────────
+
+const ExpandedDetail: React.FC<{
+  lane: LaneState;
+  isActive: boolean;
+  onToolCardClick: (toolCall: ToolCallData) => void;
+}> = ({ lane, isActive, onToolCardClick }) => {
+  const summary = generateSummary(lane.allToolCalls);
+
+  return (
+    <div style={expandedStyle} onClick={(e) => e.stopPropagation()}>
+      {/* Trigger message */}
+      {lane.triggerPreview && (
+        <div style={triggerBubbleStyle}>
+          <span style={{ fontSize: 13, flexShrink: 0, color: TOOL_COLORS.send_sms || '#3B82F6', fontWeight: 700 }}>
+            SMS
+          </span>
+          <div style={{ minWidth: 0 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: THEME.text.secondary, fontFamily: THEME.font.sans }}>
+              {lane.triggerFrom || 'Guest'}:
+            </span>
+            <span style={{ fontSize: 14, color: THEME.text.primary, fontFamily: THEME.font.sans, lineHeight: '1.5', marginLeft: 4 }}>
+              &ldquo;{lane.triggerPreview}&rdquo;
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Reasoning */}
+      {lane.currentEvent?.thinkingText && (
+        <ReasoningExpander text={lane.currentEvent.thinkingText} isStreaming={isActive} />
+      )}
+
+      {/* Tool cards */}
+      {lane.allToolCalls.length > 0 && (
+        <div style={toolCardsStyle}>
+          {lane.allToolCalls.map((tc, i) => (
+            <ToolCard
+              key={tc.id}
+              toolCall={tc}
+              index={i}
+              onClick={() => onToolCardClick(tc)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Summary */}
+      {summary && (
+        <div style={{
+          fontSize: 13, color: THEME.text.secondary, fontFamily: THEME.font.sans,
+          lineHeight: '1.5', marginTop: 10, paddingTop: 8,
+          borderTop: `1px solid ${THEME.bg.border}`,
+        }}>
+          {summary}
+        </div>
+      )}
+    </div>
+  );
+};
 
 // ─── Action Chain ────────────────────────────────────────────────────────────
 
@@ -625,7 +637,8 @@ const ActionChain: React.FC<{
 }> = React.memo(({ toolCalls, isActive, currentEvent }) => {
   if (toolCalls.length === 0 && !isActive) return null;
 
-  const isThinking = isActive && currentEvent && !currentEvent.thinkingText && currentEvent.toolCalls.length === 0;
+  const isThinking = isActive && currentEvent &&
+    !currentEvent.thinkingText && currentEvent.toolCalls.length === 0;
   const hasThinkingText = isActive && currentEvent && currentEvent.thinkingText;
 
   return (
@@ -637,18 +650,17 @@ const ActionChain: React.FC<{
           <React.Fragment key={tc.id}>
             {i > 0 && <span style={chainLineStyle} />}
             <span
-              title={`${meta?.label || tc.tool_name}`}
+              title={meta?.label || tc.tool_name}
               style={{
                 ...chainDotStyle,
                 backgroundColor: color,
-                animation: `chainDotAppear 0.2s ${ANIMATION.spring} both`,
-                animationDelay: `${i * 60}ms`,
+                animation: isActive ? `chainDotAppear 0.2s ${ANIMATION.spring} both` : undefined,
+                animationDelay: isActive ? `${i * 60}ms` : undefined,
               }}
             />
           </React.Fragment>
         );
       })}
-      {/* Thinking indicator at end of chain */}
       {(isThinking || hasThinkingText) && (
         <>
           {toolCalls.length > 0 && <span style={chainLineStyle} />}
@@ -658,7 +670,6 @@ const ActionChain: React.FC<{
     </div>
   );
 });
-
 ActionChain.displayName = 'ActionChain';
 
 // ─── Reasoning Expander ──────────────────────────────────────────────────────
@@ -687,12 +698,8 @@ const ReasoningExpander: React.FC<{
       </button>
       {expanded && (
         <div ref={ref} style={reasoningBoxStyle}>
-          <span style={reasoningTextStyle}>
-            {text}
-          </span>
-          {isStreaming && (
-            <span style={cursorStyle} />
-          )}
+          <span style={reasoningTextStyle}>{text}</span>
+          {isStreaming && <span style={cursorStyle} />}
         </div>
       )}
     </div>
@@ -711,16 +718,58 @@ function getCountdown(firesAt: string): string {
   return `${mins}m ${remainSecs}s`;
 }
 
-// ─── Styles ──────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Styles
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const DETAIL_WIDTH = 420;
+const DETAIL_GAP = 16;
 
 const containerStyle: React.CSSProperties = {
-  flex: 1, width: '100%', maxWidth: 900,
-  margin: '0 auto', display: 'flex',
-  flexDirection: 'column', overflow: 'hidden',
+  flex: 1, width: '100%', display: 'flex',
+  flexDirection: 'row', justifyContent: 'center',
+  minHeight: 0,
+};
+
+const listColumnStyle: React.CSSProperties = {
+  width: 900, maxWidth: '100%', flexShrink: 1,
+  display: 'flex', flexDirection: 'column', minHeight: 0,
+};
+
+const detailWrapperBase: React.CSSProperties = {
+  flexShrink: 0, overflow: 'hidden', display: 'flex',
+  transition: `width 0.35s ${ANIMATION.easeOut}, margin-left 0.35s ${ANIMATION.easeOut}, opacity 0.25s ${ANIMATION.easeOut}`,
+};
+
+const detailPanelInnerStyle: React.CSSProperties = {
+  width: DETAIL_WIDTH, minWidth: DETAIL_WIDTH,
+  height: '100%', display: 'flex',
+  flexDirection: 'column',
+  backgroundColor: THEME.bg.card,
+  borderRadius: RADIUS.md,
+  border: `1px solid ${THEME.bg.border}`,
+  boxShadow: SHADOW.md,
+  overflow: 'hidden',
+};
+
+const detailPanelHeaderStyle: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+  padding: '12px 16px', borderBottom: `1px solid ${THEME.bg.border}`,
+  flexShrink: 0,
+};
+
+const detailPanelBodyStyle: React.CSSProperties = {
+  flex: 1, overflowY: 'auto', padding: '12px 16px',
+};
+
+const detailCloseStyle: React.CSSProperties = {
+  background: 'none', border: 'none', cursor: 'pointer',
+  fontSize: 18, color: THEME.text.muted, padding: '0 4px',
+  fontFamily: THEME.font.sans, lineHeight: 1,
 };
 
 const headerStyle: React.CSSProperties = {
-  flexShrink: 0, padding: '12px 0',
+  flexShrink: 0, padding: '10px 0',
 };
 
 const headerRowStyle: React.CSSProperties = {
@@ -731,8 +780,15 @@ const headerLeftStyle: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 10,
 };
 
+const countBadgeStyle: React.CSSProperties = {
+  fontSize: 13, fontWeight: 600, color: THEME.text.muted,
+  backgroundColor: THEME.bg.primary, padding: '4px 12px',
+  borderRadius: RADIUS.full, whiteSpace: 'nowrap' as const,
+  fontFamily: THEME.font.sans,
+};
+
 const feedStyle: React.CSSProperties = {
-  flex: 1, overflowY: 'auto', padding: '0 0 16px',
+  flex: 1, overflowY: 'auto', padding: '0 0 12px',
   display: 'flex', flexDirection: 'column', gap: 6,
 };
 
@@ -742,36 +798,35 @@ const emptyStateStyle: React.CSSProperties = {
   gap: 8, padding: '60px 20px',
 };
 
-// Lane row
-const laneBaseStyle: React.CSSProperties = {
+// ─── Shared card base ────────────────────────────────────────────────────────
+
+const cardStyle: React.CSSProperties = {
   backgroundColor: THEME.bg.card,
   borderRadius: RADIUS.md,
   boxShadow: SHADOW.sm,
   border: `1px solid ${THEME.bg.border}`,
   overflow: 'hidden',
+  flexShrink: 0,
   cursor: 'pointer',
-  transition: `background-color ${ANIMATION.fast} ${ANIMATION.easeOut}, opacity ${ANIMATION.fast}`,
-  padding: '10px 14px',
+  transition: `background-color ${ANIMATION.fast} ${ANIMATION.easeOut}, border-color ${ANIMATION.fast}, opacity ${ANIMATION.fast}`,
+  padding: '12px 16px',
 };
 
-const laneCompactStyle: React.CSSProperties = {
+const selectedCardStyle: React.CSSProperties = {
+  backgroundColor: THEME.bg.primary,
+  borderColor: THEME.accent.violet,
+};
+
+// ─── Row layout (single line flex) ───────────────────────────────────────────
+
+const rowStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
-  gap: 12,
+  gap: 10,
   minHeight: 28,
 };
 
-const laneLeftStyle: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: 10,
-  flex: 1, minWidth: 0,
-};
-
-const checkmarkStyle: React.CSSProperties = {
-  fontSize: 12, fontWeight: 700, color: THEME.status.normal,
-  flexShrink: 0, width: 18, height: 18,
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
-  borderRadius: '50%', backgroundColor: 'rgba(5, 150, 105, 0.1)',
-};
+// ─── Status indicators ──────────────────────────────────────────────────────
 
 const activeDotStyle: React.CSSProperties = {
   width: 10, height: 10, borderRadius: '50%',
@@ -786,23 +841,22 @@ const queuedDotStyle: React.CSSProperties = {
   boxSizing: 'border-box' as const,
 };
 
-const laneNameBlockStyle: React.CSSProperties = {
-  display: 'flex', flexDirection: 'column', gap: 1,
-  minWidth: 0, flex: 1,
+const checkmarkStyle: React.CSSProperties = {
+  fontSize: 11, fontWeight: 700, color: THEME.status.normal,
+  flexShrink: 0, width: 16, height: 16,
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  borderRadius: '50%', backgroundColor: 'rgba(5, 150, 105, 0.1)',
 };
 
-const laneNameRowStyle: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: 6,
-};
+// ─── Name and badges ─────────────────────────────────────────────────────────
 
-const laneNameStyle: React.CSSProperties = {
+const nameStyle: React.CSSProperties = {
   fontSize: 14, fontWeight: 700, fontFamily: THEME.font.sans,
-  letterSpacing: '-0.01em',
-  overflow: 'hidden', textOverflow: 'ellipsis' as const,
-  whiteSpace: 'nowrap' as const,
+  color: THEME.text.accent, letterSpacing: '-0.01em',
+  whiteSpace: 'nowrap' as const, flexShrink: 0,
 };
 
-const callerBadgeStyle: React.CSSProperties = {
+const smsBadgeStyle: React.CSSProperties = {
   fontSize: 10, fontWeight: 700, flexShrink: 0,
   color: TOOL_COLORS.send_sms || '#3B82F6',
   backgroundColor: 'rgba(59,130,246,0.08)',
@@ -818,79 +872,70 @@ const systemBadgeStyle: React.CSSProperties = {
   fontFamily: THEME.font.sans,
 };
 
-const selfBadgeStyle: React.CSSProperties = {
-  fontSize: 10, fontWeight: 600, flexShrink: 0,
-  color: THEME.status.selfInitiated,
-  backgroundColor: 'rgba(13,148,136,0.08)',
-  padding: '1px 5px', borderRadius: RADIUS.full,
-  fontFamily: THEME.font.sans,
-};
+// ─── Preview row (active lanes only, second line) ────────────────────────────
 
-const lanePreviewStyle: React.CSSProperties = {
+const previewRowStyle: React.CSSProperties = {
   fontSize: 12, color: THEME.text.muted,
-  fontFamily: THEME.font.sans, lineHeight: '1.3',
+  fontFamily: THEME.font.sans, lineHeight: '1.4',
+  paddingLeft: 26, paddingTop: 2,
   overflow: 'hidden', textOverflow: 'ellipsis' as const,
   whiteSpace: 'nowrap' as const,
 };
 
-const laneCenterStyle: React.CSSProperties = {
-  flexShrink: 0, display: 'flex', alignItems: 'center',
+// ─── Meta (right side) ──────────────────────────────────────────────────────
+
+const metaStyle: React.CSSProperties = {
+  fontSize: 12, fontWeight: 600, fontFamily: THEME.font.mono,
+  color: THEME.text.muted, whiteSpace: 'nowrap' as const, flexShrink: 0,
 };
 
-const laneRightStyle: React.CSSProperties = {
-  display: 'flex', flexDirection: 'column', alignItems: 'flex-end',
-  gap: 2, flexShrink: 0, minWidth: 50,
+const actCountStyle: React.CSSProperties = {
+  fontSize: 11, color: THEME.text.muted, fontFamily: THEME.font.sans,
+  whiteSpace: 'nowrap' as const, flexShrink: 0,
 };
 
 const queuedLabelStyle: React.CSSProperties = {
   fontSize: 11, fontWeight: 600, color: THEME.text.muted,
   fontFamily: THEME.font.sans, textTransform: 'uppercase' as const,
-  letterSpacing: '0.04em',
+  letterSpacing: '0.04em', flexShrink: 0,
 };
 
-const elapsedStyle: React.CSSProperties = {
-  fontSize: 13, fontWeight: 600, fontFamily: THEME.font.mono,
-  whiteSpace: 'nowrap' as const,
-};
+// ─── Done summary (shows on hover, inline in the flexible space) ─────────────
 
-const actCountStyle: React.CSSProperties = {
-  fontSize: 11, color: THEME.text.muted, fontFamily: THEME.font.sans,
-  whiteSpace: 'nowrap' as const,
-};
-
-const doneSummaryStyle: React.CSSProperties = {
+const doneSummaryInlineStyle: React.CSSProperties = {
+  flex: 1, minWidth: 0,
   fontSize: 12, color: THEME.text.secondary,
-  fontFamily: THEME.font.sans, lineHeight: '1.5',
-  paddingLeft: 28, paddingTop: 4,
+  fontFamily: THEME.font.sans,
   overflow: 'hidden', textOverflow: 'ellipsis' as const,
   whiteSpace: 'nowrap' as const,
 };
 
-// Action chain
+// ─── Action chain ────────────────────────────────────────────────────────────
+
 const chainContainerStyle: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: 3,
+  display: 'flex', alignItems: 'center', gap: 2,
+  flexShrink: 0, marginLeft: 4, marginRight: 4,
 };
 
 const chainDotStyle: React.CSSProperties = {
-  width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+  width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
 };
 
 const chainLineStyle: React.CSSProperties = {
-  width: 8, height: 2, backgroundColor: THEME.bg.border, flexShrink: 0,
+  width: 6, height: 2, backgroundColor: THEME.bg.border, flexShrink: 0,
 };
 
 const thinkingDotStyle: React.CSSProperties = {
-  width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+  width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
   border: `2px solid ${THEME.accent.violet}`,
   backgroundColor: 'transparent',
   boxSizing: 'border-box' as const,
   animation: 'thinkingPulse 1.2s ease-in-out infinite',
 };
 
-// Expanded area
+// ─── Expanded area ───────────────────────────────────────────────────────────
+
 const expandedStyle: React.CSSProperties = {
-  paddingTop: 12, borderTop: `1px solid ${THEME.bg.border}`,
-  marginTop: 10,
 };
 
 const triggerBubbleStyle: React.CSSProperties = {
@@ -906,7 +951,8 @@ const toolCardsStyle: React.CSSProperties = {
   marginTop: 10,
 };
 
-// Reasoning
+// ─── Reasoning ───────────────────────────────────────────────────────────────
+
 const reasoningBtnStyle: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 4,
   background: 'none', border: 'none', padding: '4px 0',
@@ -932,10 +978,11 @@ const cursorStyle: React.CSSProperties = {
   animation: 'cursorBlink 1s step-end infinite',
 };
 
-// Divider
+// ─── Divider ─────────────────────────────────────────────────────────────────
+
 const dividerStyle: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 12,
-  margin: '6px 0', padding: '0 4px',
+  margin: '4px 0', padding: '0 4px',
 };
 
 const dividerLineStyle: React.CSSProperties = {
@@ -948,25 +995,27 @@ const dividerLabelStyle: React.CSSProperties = {
   fontFamily: THEME.font.sans,
 };
 
-// Show more button
+// ─── Show more button ────────────────────────────────────────────────────────
+
 const showMoreStyle: React.CSSProperties = {
   background: 'none', border: `1px solid ${THEME.bg.border}`,
-  borderRadius: RADIUS.md, padding: '6px 16px',
+  borderRadius: RADIUS.md, padding: '5px 16px',
   fontSize: 12, fontWeight: 600, color: THEME.text.muted,
   cursor: 'pointer', fontFamily: THEME.font.sans,
   textAlign: 'center' as const, width: '100%',
   transition: `background-color ${ANIMATION.fast}`,
 };
 
-// Task rows
+// ─── Task rows ───────────────────────────────────────────────────────────────
+
 const taskRowStyle: React.CSSProperties = {
   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-  gap: 12, padding: '8px 14px', backgroundColor: THEME.bg.card,
+  gap: 12, padding: '7px 14px', backgroundColor: THEME.bg.card,
   borderRadius: RADIUS.md, border: `1px solid ${THEME.bg.border}`,
 };
 
 const taskDescStyle: React.CSSProperties = {
-  fontSize: 13, color: THEME.text.secondary, fontFamily: THEME.font.sans,
+  fontSize: 12, color: THEME.text.secondary, fontFamily: THEME.font.sans,
   lineHeight: '1.4', flex: 1, minWidth: 0, overflow: 'hidden',
   textOverflow: 'ellipsis' as const, whiteSpace: 'nowrap' as const,
 };
@@ -976,7 +1025,7 @@ const taskTimeStyle: React.CSSProperties = {
   fontFamily: THEME.font.mono, flexShrink: 0,
 };
 
-// ─── Backward Compatibility ──────────────────────────────────────────────────
+// ─── Exports ─────────────────────────────────────────────────────────────────
 
 export { deriveLanes };
 export type { LaneState as LaneStateType };

@@ -2,6 +2,7 @@ import { v4 as uuid } from 'uuid';
 import type { Response } from 'express';
 import type { SSEEventType } from '@apm/shared';
 import type { ConversationType } from './lane-manager.js';
+import { SSEEventLogModel, nextSSESeq } from './db.js';
 
 export interface LaneContext {
   conversation_id: string;
@@ -23,16 +24,19 @@ export function addClient(res: Response): void {
 export function emitSSE(type: SSEEventType, payload: unknown, laneContext?: LaneContext): void {
   const id = uuid();
   const timestamp = new Date().toISOString();
+  const seq = nextSSESeq();
 
   // Flatten payload into the data object so the client receives fields at the top level
   // (EventSource listeners parse e.data and expect payload fields directly, not nested under .payload)
-  const data = JSON.stringify({
+  const dataObj: Record<string, unknown> = {
     id,
     type,
     timestamp,
+    seq,
     ...(payload as Record<string, unknown>),
     ...(laneContext ? { conversation_id: laneContext.conversation_id, conversation_type: laneContext.conversation_type } : {}),
-  });
+  };
+  const data = JSON.stringify(dataObj);
   const message = `id: ${id}\nevent: ${type}\ndata: ${data}\n\n`;
 
   for (const client of clients) {
@@ -43,6 +47,11 @@ export function emitSSE(type: SSEEventType, payload: unknown, laneContext?: Lane
       clients.delete(client);
     }
   }
+
+  // Persist to MongoDB (fire-and-forget)
+  SSEEventLogModel.create({ seq, type, timestamp, data: dataObj }).catch(err => {
+    console.error('[SSE] Failed to persist event:', err.message);
+  });
 }
 
 export function getClientCount(): number {

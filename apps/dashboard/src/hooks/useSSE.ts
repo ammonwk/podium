@@ -194,6 +194,302 @@ function createInitialState(): DashboardState {
   };
 }
 
+// ─── Reducer ─────────────────────────────────────────────────────────────────
+// Pure function that applies a single SSE event to DashboardState.
+// Used for both live events and historical replay.
+
+interface ReducerContext {
+  activityCounter: { value: number };
+  pendingTriggers: Map<string, TriggerMessage>;
+}
+
+function applySSEEvent(
+  prev: DashboardState,
+  eventType: string,
+  payload: Record<string, unknown>,
+  ctx: ReducerContext,
+): DashboardState {
+  switch (eventType) {
+    case SSE_EVENTS.EVENT_QUEUED: {
+      const p = payload as unknown as EventQueuedPayload & { conversation_id?: string; conversation_type?: 'demo' | 'caller' };
+      // Don't add if already exists
+      if (prev.events.some(ev => ev.name === p.event_name)) {
+        return prev;
+      }
+      const newEvent: EventState = {
+        name: p.event_name,
+        source: p.source,
+        status: 'queued',
+        thinkingText: '',
+        toolCalls: [],
+        conversationId: p.conversation_id,
+        conversationType: p.conversation_type,
+      };
+      return {
+        ...prev,
+        events: [...prev.events, newEvent],
+      };
+    }
+
+    case SSE_EVENTS.EVENT_START: {
+      const p = payload as unknown as EventStartPayload & { conversation_id?: string; conversation_type?: 'demo' | 'caller' };
+      // Attach trigger message if we stored one for this event
+      const trigger = ctx.pendingTriggers.get(p.event_name);
+      if (trigger) {
+        ctx.pendingTriggers.delete(p.event_name);
+      }
+
+      const newEvent: EventState = {
+        name: p.event_name,
+        source: p.source,
+        status: 'active',
+        thinkingText: '',
+        toolCalls: [],
+        startedAt: (payload.timestamp as string) || new Date().toISOString(),
+        triggerMessage: trigger,
+        conversationId: p.conversation_id,
+        conversationType: p.conversation_type,
+      };
+      // Check if this event was already queued
+      const existingIdx = prev.events.findIndex(
+        ev => ev.name === p.event_name && ev.status === 'queued'
+      );
+      let newEvents: EventState[];
+      let newIndex: number;
+      if (existingIdx >= 0) {
+        newEvents = prev.events.map((ev, i) =>
+          i === existingIdx ? {
+            ...ev,
+            status: 'active' as const,
+            startedAt: (payload.timestamp as string) || new Date().toISOString(),
+            triggerMessage: trigger || ev.triggerMessage,
+            conversationId: p.conversation_id || ev.conversationId,
+            conversationType: p.conversation_type || ev.conversationType,
+          } : ev
+        );
+        newIndex = existingIdx;
+      } else {
+        newEvents = [...prev.events, newEvent];
+        newIndex = newEvents.length - 1;
+      }
+
+      // Mark upcoming tasks as fired if this matches
+      const newTasks = prev.upcomingTasks.map(t =>
+        (t.description && p.event_name.includes(t.description.substring(0, 20))) ||
+        p.source === 'self-scheduled'
+          ? { ...t, status: 'fired' as const }
+          : t
+      );
+
+      return {
+        ...prev,
+        events: newEvents,
+        activeEventIndex: newIndex,
+        isProcessing: true,
+        upcomingTasks: newTasks,
+      };
+    }
+
+    case SSE_EVENTS.EVENT_DONE: {
+      const p = payload as unknown as EventDonePayload;
+      const newEvents = prev.events.map(ev =>
+        ev.name === p.event_name && ev.status === 'active'
+          ? { ...ev, status: 'done' as const, completedAt: (payload.timestamp as string) || new Date().toISOString() }
+          : ev
+      );
+      const stillProcessing = newEvents.some(ev => ev.status === 'active');
+      return {
+        ...prev,
+        events: newEvents,
+        isProcessing: stillProcessing,
+      };
+    }
+
+    case SSE_EVENTS.THINKING: {
+      const p = payload as unknown as ThinkingPayload;
+      const newEvents = prev.events.map(ev =>
+        ev.name === p.event_name && ev.status === 'active'
+          ? { ...ev, thinkingText: ev.thinkingText + p.text }
+          : ev
+      );
+      return { ...prev, events: newEvents };
+    }
+
+    case SSE_EVENTS.TOOL_CALL: {
+      const p = payload as unknown as ToolCallPayload & { conversation_id?: string };
+      const toolCall: ToolCallData = {
+        id: `tc_${++ctx.activityCounter.value}_${Math.random().toString(36).slice(2, 7)}`,
+        tool_name: p.tool_name,
+        input: p.input,
+        result: p.result,
+        event_name: p.event_name,
+        timestamp: (payload.timestamp as string) || new Date().toISOString(),
+        conversationId: p.conversation_id,
+      };
+
+      // Add tool call to active event
+      const newEvents = prev.events.map(ev =>
+        ev.name === p.event_name && ev.status === 'active'
+          ? { ...ev, toolCalls: [...ev.toolCalls, toolCall] }
+          : ev
+      );
+
+      // Create activity item
+      const newActivities = [...prev.activities];
+      const actId = `act_${++ctx.activityCounter.value}`;
+
+      // Update properties and financials
+      let newProperties = prev.properties;
+      let newFinancials = { ...prev.financials };
+
+      switch (p.tool_name) {
+        case 'send_sms': {
+          const result = p.result as Record<string, unknown>;
+          const input = p.input as Record<string, unknown>;
+          newActivities.unshift({
+            id: actId,
+            type: 'sms_out',
+            timestamp: (payload.timestamp as string) || new Date().toISOString(),
+            data: { ...input, ...result },
+            eventName: p.event_name,
+          });
+          break;
+        }
+
+        case 'create_work_order': {
+          const result = p.result as Record<string, unknown>;
+          const input = p.input as Record<string, unknown>;
+          newActivities.unshift({
+            id: actId,
+            type: 'work_order',
+            timestamp: (payload.timestamp as string) || new Date().toISOString(),
+            data: { ...input, ...result },
+            eventName: p.event_name,
+          });
+          const propId = input.property_id as string;
+          const severity = input.severity as string;
+          newProperties = prev.properties.map(p =>
+            p.id === propId
+              ? {
+                  ...p,
+                  status: severity === 'emergency' ? 'emergency' as const : 'attention' as const,
+                  activeIssues: [...p.activeIssues, input.issue_description as string],
+                }
+              : p
+          );
+          const cost = (input.estimated_cost as number) || 0;
+          newFinancials.costs += cost;
+          break;
+        }
+
+        case 'adjust_price': {
+          const result = p.result as Record<string, unknown>;
+          const input = p.input as Record<string, unknown>;
+          newActivities.unshift({
+            id: actId,
+            type: 'price_change',
+            timestamp: (payload.timestamp as string) || new Date().toISOString(),
+            data: { ...input, ...result },
+            eventName: p.event_name,
+          });
+          const propId = input.property_id as string;
+          const newPrice = input.new_price as number;
+          newProperties = prev.properties.map(p =>
+            p.id === propId
+              ? { ...p, current_price: newPrice }
+              : p
+          );
+          const prop = prev.properties.find(p => p.id === propId);
+          if (prop) {
+            const prevDelta = prop.current_price - prop.base_price;
+            const newDelta = newPrice - prop.base_price;
+            newFinancials.revenue += (newDelta - prevDelta);
+          }
+          break;
+        }
+
+        case 'log_decision': {
+          const result = p.result as Record<string, unknown>;
+          const input = p.input as Record<string, unknown>;
+          newActivities.unshift({
+            id: actId,
+            type: 'decision',
+            timestamp: (payload.timestamp as string) || new Date().toISOString(),
+            data: { ...input, ...result },
+            eventName: p.event_name,
+          });
+          newFinancials.decisions += 1;
+          break;
+        }
+
+        case 'get_market_data': {
+          break;
+        }
+
+        case 'update_schedule': {
+          const result = p.result as Record<string, unknown>;
+          const input = p.input as Record<string, unknown>;
+          newActivities.unshift({
+            id: actId,
+            type: 'schedule_change',
+            timestamp: (payload.timestamp as string) || new Date().toISOString(),
+            data: { ...input, ...result },
+            eventName: p.event_name,
+          });
+          break;
+        }
+
+        case 'schedule_task': {
+          const result = p.result as Record<string, unknown>;
+          const input = p.input as Record<string, unknown>;
+          newActivities.unshift({
+            id: actId,
+            type: 'scheduled_task',
+            timestamp: (payload.timestamp as string) || new Date().toISOString(),
+            data: { ...input, ...result },
+            eventName: p.event_name,
+          });
+          break;
+        }
+      }
+
+      return {
+        ...prev,
+        events: newEvents,
+        activities: newActivities,
+        properties: newProperties,
+        financials: newFinancials,
+      };
+    }
+
+    case SSE_EVENTS.SCHEDULED_TASK: {
+      const p = payload as unknown as ScheduledTaskPayload;
+      const newTask: TaskState = {
+        task_id: p.task_id,
+        description: p.description,
+        fires_at: p.fires_at,
+        status: 'pending',
+      };
+      return {
+        ...prev,
+        upcomingTasks: [...prev.upcomingTasks, newTask],
+      };
+    }
+
+    case SSE_EVENTS.RESET: {
+      return createInitialState();
+    }
+
+    case SSE_EVENTS.ERROR: {
+      const p = payload as unknown as ErrorPayload;
+      return { ...prev, error: p.message };
+    }
+
+    default:
+      return prev;
+  }
+}
+
 // ─── Server URL ─────────────────────────────────────────────────────────────
 
 function getServerUrl(): string {
@@ -223,6 +519,69 @@ export function useSSE(): DashboardState & {
     }
 
     const serverUrl = getServerUrl();
+
+    // Hydrate from history before connecting to live stream
+    fetch(`${serverUrl}/api/events/history`)
+      .then(resp => resp.ok ? resp.json() : null)
+      .then(data => {
+        if (data?.events?.length) {
+          // Build a reducer context for hydration
+          const ctx: ReducerContext = {
+            activityCounter: { value: 0 },
+            pendingTriggers: new Map(),
+          };
+
+          // Pre-populate trigger messages from the historical events:
+          // For each event_queued with a guest_message source, find the matching
+          // DEMO_EVENT and create a trigger message
+          for (const evt of data.events) {
+            if (evt.type === 'event_queued' && evt.source === 'human') {
+              const demoEvt = DEMO_EVENTS.find((d: any) => d.name === evt.event_name);
+              if (demoEvt && demoEvt.type === 'guest_message' && demoEvt.body) {
+                ctx.pendingTriggers.set(evt.event_name, {
+                  from: demoEvt.from || '',
+                  body: demoEvt.body || '',
+                  name: demoEvt.name,
+                });
+              } else if (demoEvt && demoEvt.type === 'market_alert') {
+                ctx.pendingTriggers.set(evt.event_name, {
+                  from: 'Market Alert',
+                  body: (demoEvt as any).message || '',
+                  name: demoEvt.name,
+                });
+              }
+            }
+          }
+
+          let hydrated = createInitialState();
+          for (const evt of data.events) {
+            hydrated = applySSEEvent(hydrated, evt.type, evt, ctx);
+          }
+
+          // Determine demoPhase from hydrated state
+          if (hydrated.events.length > 0) {
+            const hasActive = hydrated.events.some(e => e.status === 'active');
+            const allDone = hydrated.events.every(e => e.status === 'done');
+            if (hasActive) {
+              hydrated.demoPhase = 'running';
+            } else if (allDone) {
+              hydrated.demoPhase = 'self-managing';
+            } else {
+              hydrated.demoPhase = 'running';
+            }
+            hydrated.demoEventIndex = DEMO_EVENTS.length - 1;
+          }
+
+          // Sync refs with hydrated state
+          activityCounterRef.current = ctx.activityCounter.value;
+
+          setState(hydrated);
+        }
+      })
+      .catch(err => {
+        console.error('[SSE] Failed to fetch history:', err);
+      });
+
     const es = new EventSource(`${serverUrl}/events/stream`);
     eventSourceRef.current = es;
 
@@ -240,300 +599,30 @@ export function useSSE(): DashboardState & {
       }, 2000);
     };
 
-    // Listen for each SSE event type
-    es.addEventListener(SSE_EVENTS.EVENT_START, (e: MessageEvent) => {
-      const payload = JSON.parse(e.data) as EventStartPayload & { conversation_id?: string; conversation_type?: 'demo' | 'caller' };
-      setState(prev => {
-        // Attach trigger message if we stored one for this event
-        const trigger = pendingTriggersRef.current.get(payload.event_name);
-        if (trigger) {
-          pendingTriggersRef.current.delete(payload.event_name);
-        }
+    // Create a shared context for live events that uses the refs
+    const makeLiveCtx = (): ReducerContext => ({
+      activityCounter: activityCounterRef as unknown as { value: number },
+      pendingTriggers: pendingTriggersRef.current,
+    });
 
-        const newEvent: EventState = {
-          name: payload.event_name,
-          source: payload.source,
-          status: 'active',
-          thinkingText: '',
-          toolCalls: [],
-          startedAt: new Date().toISOString(),
-          triggerMessage: trigger,
-          conversationId: payload.conversation_id,
-          conversationType: payload.conversation_type,
-        };
-        // Check if this event was already queued
-        const existingIdx = prev.events.findIndex(
-          ev => ev.name === payload.event_name && ev.status === 'queued'
-        );
-        let newEvents: EventState[];
-        let newIndex: number;
-        if (existingIdx >= 0) {
-          newEvents = prev.events.map((ev, i) =>
-            i === existingIdx ? {
-              ...ev,
-              status: 'active' as const,
-              startedAt: new Date().toISOString(),
-              triggerMessage: trigger || ev.triggerMessage,
-              conversationId: payload.conversation_id || ev.conversationId,
-              conversationType: payload.conversation_type || ev.conversationType,
-            } : ev
-          );
-          newIndex = existingIdx;
-        } else {
-          newEvents = [...prev.events, newEvent];
-          newIndex = newEvents.length - 1;
-        }
+    // Listen for each SSE event type — delegate to the shared reducer
+    const sseTypes = [
+      SSE_EVENTS.EVENT_START,
+      SSE_EVENTS.EVENT_DONE,
+      SSE_EVENTS.EVENT_QUEUED,
+      SSE_EVENTS.THINKING,
+      SSE_EVENTS.TOOL_CALL,
+      SSE_EVENTS.SCHEDULED_TASK,
+      SSE_EVENTS.RESET,
+      SSE_EVENTS.ERROR,
+    ];
 
-        // Mark upcoming tasks as fired if this matches
-        const newTasks = prev.upcomingTasks.map(t =>
-          (t.description && payload.event_name.includes(t.description.substring(0, 20))) ||
-          payload.source === 'self-scheduled'
-            ? { ...t, status: 'fired' as const }
-            : t
-        );
-
-        return {
-          ...prev,
-          events: newEvents,
-          activeEventIndex: newIndex,
-          isProcessing: true,
-          upcomingTasks: newTasks,
-        };
+    for (const type of sseTypes) {
+      es.addEventListener(type, (e: MessageEvent) => {
+        const payload = JSON.parse(e.data);
+        setState(prev => applySSEEvent(prev, type, payload, makeLiveCtx()));
       });
-    });
-
-    es.addEventListener(SSE_EVENTS.EVENT_DONE, (e: MessageEvent) => {
-      const payload = JSON.parse(e.data) as EventDonePayload & { conversation_id?: string };
-      setState(prev => {
-        const newEvents = prev.events.map(ev =>
-          ev.name === payload.event_name && ev.status === 'active'
-            ? { ...ev, status: 'done' as const, completedAt: new Date().toISOString() }
-            : ev
-        );
-        // isProcessing is true as long as ANY event is still active
-        const stillProcessing = newEvents.some(ev => ev.status === 'active');
-        return {
-          ...prev,
-          events: newEvents,
-          isProcessing: stillProcessing,
-        };
-      });
-    });
-
-    es.addEventListener(SSE_EVENTS.EVENT_QUEUED, (e: MessageEvent) => {
-      const payload = JSON.parse(e.data) as EventQueuedPayload & { conversation_id?: string; conversation_type?: 'demo' | 'caller' };
-      setState(prev => {
-        // Don't add if already exists
-        if (prev.events.some(ev => ev.name === payload.event_name)) {
-          return prev;
-        }
-        const newEvent: EventState = {
-          name: payload.event_name,
-          source: payload.source,
-          status: 'queued',
-          thinkingText: '',
-          toolCalls: [],
-          conversationId: payload.conversation_id,
-          conversationType: payload.conversation_type,
-        };
-        return {
-          ...prev,
-          events: [...prev.events, newEvent],
-        };
-      });
-    });
-
-    es.addEventListener(SSE_EVENTS.THINKING, (e: MessageEvent) => {
-      const payload = JSON.parse(e.data) as ThinkingPayload & { conversation_id?: string };
-      setState(prev => {
-        const newEvents = prev.events.map(ev =>
-          ev.name === payload.event_name && ev.status === 'active'
-            ? { ...ev, thinkingText: ev.thinkingText + payload.text }
-            : ev
-        );
-        return { ...prev, events: newEvents };
-      });
-    });
-
-    es.addEventListener(SSE_EVENTS.TOOL_CALL, (e: MessageEvent) => {
-      const payload = JSON.parse(e.data) as ToolCallPayload & { conversation_id?: string };
-      const toolCall: ToolCallData = {
-        id: `tc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-        tool_name: payload.tool_name,
-        input: payload.input,
-        result: payload.result,
-        event_name: payload.event_name,
-        timestamp: new Date().toISOString(),
-        conversationId: payload.conversation_id,
-      };
-
-      setState(prev => {
-        // Add tool call to active event
-        const newEvents = prev.events.map(ev =>
-          ev.name === payload.event_name && ev.status === 'active'
-            ? { ...ev, toolCalls: [...ev.toolCalls, toolCall] }
-            : ev
-        );
-
-        // Create activity item
-        const newActivities = [...prev.activities];
-        const actId = `act_${++activityCounterRef.current}`;
-
-        // Update properties and financials
-        let newProperties = prev.properties;
-        let newFinancials = { ...prev.financials };
-
-        switch (payload.tool_name) {
-          case 'send_sms': {
-            const result = payload.result as Record<string, unknown>;
-            const input = payload.input as Record<string, unknown>;
-            // Outbound SMS from the agent
-            newActivities.unshift({
-              id: actId,
-              type: 'sms_out',
-              timestamp: new Date().toISOString(),
-              data: { ...input, ...result },
-              eventName: payload.event_name,
-            });
-            break;
-          }
-
-          case 'create_work_order': {
-            const result = payload.result as Record<string, unknown>;
-            const input = payload.input as Record<string, unknown>;
-            newActivities.unshift({
-              id: actId,
-              type: 'work_order',
-              timestamp: new Date().toISOString(),
-              data: { ...input, ...result },
-              eventName: payload.event_name,
-            });
-            // Update property status
-            const propId = input.property_id as string;
-            const severity = input.severity as string;
-            newProperties = prev.properties.map(p =>
-              p.id === propId
-                ? {
-                    ...p,
-                    status: severity === 'emergency' ? 'emergency' as const : 'attention' as const,
-                    activeIssues: [...p.activeIssues, input.issue_description as string],
-                  }
-                : p
-            );
-            // Update costs
-            const cost = (input.estimated_cost as number) || 0;
-            newFinancials.costs += cost;
-            break;
-          }
-
-          case 'adjust_price': {
-            const result = payload.result as Record<string, unknown>;
-            const input = payload.input as Record<string, unknown>;
-            newActivities.unshift({
-              id: actId,
-              type: 'price_change',
-              timestamp: new Date().toISOString(),
-              data: { ...input, ...result },
-              eventName: payload.event_name,
-            });
-            // Update property price
-            const propId = input.property_id as string;
-            const newPrice = input.new_price as number;
-            newProperties = prev.properties.map(p =>
-              p.id === propId
-                ? { ...p, current_price: newPrice }
-                : p
-            );
-            // Update revenue (difference from base)
-            const prop = prev.properties.find(p => p.id === propId);
-            if (prop) {
-              const prevDelta = prop.current_price - prop.base_price;
-              const newDelta = newPrice - prop.base_price;
-              newFinancials.revenue += (newDelta - prevDelta);
-            }
-            break;
-          }
-
-          case 'log_decision': {
-            const result = payload.result as Record<string, unknown>;
-            const input = payload.input as Record<string, unknown>;
-            newActivities.unshift({
-              id: actId,
-              type: 'decision',
-              timestamp: new Date().toISOString(),
-              data: { ...input, ...result },
-              eventName: payload.event_name,
-            });
-            newFinancials.decisions += 1;
-            break;
-          }
-
-          case 'get_market_data': {
-            // No activity feed item for market data - it just shows in the stage
-            break;
-          }
-
-          case 'update_schedule': {
-            const result = payload.result as Record<string, unknown>;
-            const input = payload.input as Record<string, unknown>;
-            newActivities.unshift({
-              id: actId,
-              type: 'schedule_change',
-              timestamp: new Date().toISOString(),
-              data: { ...input, ...result },
-              eventName: payload.event_name,
-            });
-            break;
-          }
-
-          case 'schedule_task': {
-            const result = payload.result as Record<string, unknown>;
-            const input = payload.input as Record<string, unknown>;
-            newActivities.unshift({
-              id: actId,
-              type: 'scheduled_task',
-              timestamp: new Date().toISOString(),
-              data: { ...input, ...result },
-              eventName: payload.event_name,
-            });
-            break;
-          }
-        }
-
-        return {
-          ...prev,
-          events: newEvents,
-          activities: newActivities,
-          properties: newProperties,
-          financials: newFinancials,
-        };
-      });
-    });
-
-    es.addEventListener(SSE_EVENTS.SCHEDULED_TASK, (e: MessageEvent) => {
-      const payload: ScheduledTaskPayload = JSON.parse(e.data);
-      setState(prev => {
-        const newTask: TaskState = {
-          task_id: payload.task_id,
-          description: payload.description,
-          fires_at: payload.fires_at,
-          status: 'pending',
-        };
-        return {
-          ...prev,
-          upcomingTasks: [...prev.upcomingTasks, newTask],
-        };
-      });
-    });
-
-    es.addEventListener(SSE_EVENTS.RESET, () => {
-      setState(createInitialState());
-    });
-
-    es.addEventListener(SSE_EVENTS.ERROR, (e: MessageEvent) => {
-      const payload: ErrorPayload = JSON.parse(e.data);
-      setState(prev => ({ ...prev, error: payload.message }));
-    });
+    }
   }, []);
 
   useEffect(() => {
@@ -644,7 +733,7 @@ export function useSSE(): DashboardState & {
     try {
       // Toggle between Anthropic and Cerebras
       const nextConfig = state.providerConfig.provider === 'anthropic'
-        ? { provider: 'cerebras', model: 'zai-glm-4.7' }
+        ? { provider: 'cerebras', model: 'gpt-oss-120b' }
         : { provider: 'anthropic', model: 'claude-opus-4-6' };
 
       const resp = await fetch(`${serverUrl}/api/provider`, {
@@ -670,12 +759,17 @@ export function useSSE(): DashboardState & {
     setState(prev => ({ ...prev, activeEventIndex: index }));
   }, []);
 
+  const clearError = useCallback(() => {
+    setState(prev => ({ ...prev, error: null }));
+  }, []);
+
   return {
     ...state,
     runDemo,
     resetDemo,
     switchProvider,
     selectEvent,
+    clearError,
   };
 }
 

@@ -78,7 +78,7 @@ export const PROVIDERS = {
   },
   CEREBRAS: {
     provider: 'cerebras' as const,
-    model: 'zai-glm-4.7',
+    model: 'gpt-oss-120b',
   },
 };
 
@@ -271,6 +271,15 @@ export const DEMO_EVENTS = [
     message: 'Park City Jazz Festival announced for this weekend. Competitor average nightly rate: $310.',
   },
 ];
+
+// ─── Agent Config ────────────────────────────────────────────────────────────
+
+// ─── Booking Times ──────────────────────────────────────────────────────────
+
+export const BOOKING_TIMES = {
+  CHECK_IN_HOUR: 15,   // 3 PM
+  CHECK_OUT_HOUR: 11,  // 11 AM
+} as const;
 
 // ─── Agent Config ────────────────────────────────────────────────────────────
 

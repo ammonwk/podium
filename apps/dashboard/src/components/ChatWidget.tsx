@@ -66,9 +66,17 @@ export const ChatWidget: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [inputText, setInputText] = useState('');
-  const [role, setRole] = useState<ChatRole>('interested_person');
+  const [role, setRole] = useState<ChatRole>(() => {
+    try {
+      return (localStorage.getItem('chat_role') as ChatRole) || 'interested_person';
+    } catch { return 'interested_person'; }
+  });
   const [isStreaming, setIsStreaming] = useState(false);
-  const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
+  const [sessionId, setSessionId] = useState(() => {
+    try {
+      return localStorage.getItem(`chat_session_${role}`) || crypto.randomUUID();
+    } catch { return crypto.randomUUID(); }
+  });
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -79,6 +87,27 @@ export const ChatWidget: React.FC = () => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Persist sessionId when it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(`chat_session_${role}`, sessionId);
+      localStorage.setItem('chat_role', role);
+    } catch {}
+  }, [sessionId, role]);
+
+  // Load chat history when opened with an existing session
+  useEffect(() => {
+    if (!isOpen) return;
+    fetch(`/api/chat/history?sessionId=${sessionId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.messages?.length) {
+          setMessages(data.messages);
+        }
+      })
+      .catch(() => {});
+  }, [isOpen, sessionId]);
 
   // Focus input when opened
   useEffect(() => {
@@ -335,7 +364,9 @@ export const ChatWidget: React.FC = () => {
                   if (r.key !== role) {
                     setRole(r.key);
                     setMessages([]);
-                    setSessionId(crypto.randomUUID());
+                    // Restore or create session for the new role
+                    const stored = localStorage.getItem(`chat_session_${r.key}`);
+                    setSessionId(stored || crypto.randomUUID());
                   }
                 }}
               >

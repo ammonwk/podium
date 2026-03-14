@@ -73,6 +73,7 @@ export async function executeSendSms(
             },
             body,
           }),
+          signal: AbortSignal.timeout(10_000),
         },
       );
 

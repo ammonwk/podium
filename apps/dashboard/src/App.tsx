@@ -180,7 +180,6 @@ const App: React.FC = () => {
             />
           ) : (
             <>
-              {/* Compact Property Strip */}
               <PropertyVillage
                 properties={state.properties}
                 onPropertyClick={openPropertyView}
@@ -213,9 +212,14 @@ const App: React.FC = () => {
             {state.error}
             <button
               style={styles.errorDismiss}
-              onClick={() => {/* Error auto-clears on reconnect */}}
+              onClick={() => state.clearError()}
+              onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(220, 38, 38, 0.15)'; }}
+              onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; }}
             >
-              ×
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <line x1="2" y1="2" x2="8" y2="8" />
+                <line x1="8" y1="2" x2="2" y2="8" />
+              </svg>
             </button>
           </div>
         )}
@@ -252,6 +256,7 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: THEME.bg.card,
     boxShadow: SHADOW.sm,
     zIndex: 10,
+    position: 'relative',
   },
   navLeft: {
     display: 'flex',
@@ -268,6 +273,9 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: '-0.03em',
   },
   navCenter: {
+    position: 'absolute',
+    left: '50%',
+    transform: 'translateX(-50%)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -320,16 +328,17 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
-    overflow: 'hidden',
+    minHeight: 0,
   },
 
   // AI feed container — centered, full width
   aiFeedContainer: {
     flex: 1,
     display: 'flex',
+    flexDirection: 'column',
+    minHeight: 0,
     overflow: 'hidden',
     padding: '0 24px',
-    marginTop: '56px',
   },
 
   // Error
@@ -353,13 +362,22 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: SHADOW.lg,
   },
   errorDismiss: {
-    background: 'none',
-    border: 'none',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '24px',
+    height: '24px',
+    borderRadius: '50%',
+    backgroundColor: 'transparent',
+    border: '1px solid rgba(220, 38, 38, 0.25)',
     color: THEME.status.emergency,
     cursor: 'pointer',
-    fontSize: '18px',
-    padding: '0 0 0 8px',
+    fontSize: '14px',
+    fontWeight: 600,
+    lineHeight: 1,
+    marginLeft: '4px',
     fontFamily: THEME.font.sans,
+    transition: 'background-color 0.15s ease',
   },
 };
 
