@@ -351,6 +351,7 @@ export type SSEEventType =
   | 'event_done'
   | 'scheduled_task'
   | 'event_queued'
+  | 'issue_resolved'
   | 'error'
   | 'reset';
 

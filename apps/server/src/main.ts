@@ -39,7 +39,7 @@ import { buildSystemPrompt } from './agent/system-prompt.js';
 import { ALL_TOOLS, CHAT_BOOKING_TOOLS, CHAT_OWNER_TOOLS, CHAT_OCCUPANT_TOOLS, NO_TOOLS } from './tools/definitions.js';
 import { normalizePhone } from './shared/phone-utils.js';
 import { executeCreateBooking } from './tools/create-booking.js';
-import { BookingModel, PropertyModel, ScheduleEventModel } from './shared/db.js';
+import { BookingModel, PropertyModel, ScheduleEventModel, WorkOrderModel } from './shared/db.js';
 import { startProactiveLoops, resetProactiveState } from './proactive/proactive-loops.js';
 
 // ─── Express App ──────────────────────────────────────────────────────────────
@@ -698,6 +698,33 @@ app.delete('/bookings/:id', async (req, res) => {
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to delete booking' });
   }
+});
+
+// POST /work-orders/resolve — Mark a work order as completed and dismiss the issue
+app.post('/work-orders/resolve', async (req, res) => {
+  const { property_id, issue_description } = req.body || {};
+
+  if (!property_id || !issue_description) {
+    res.status(400).json({ error: 'Missing property_id or issue_description' });
+    return;
+  }
+
+  // Find and update the matching work order
+  const workOrder = await WorkOrderModel.findOneAndUpdate(
+    { property_id, issue_description, status: { $nin: ['completed', 'cancelled'] } },
+    { status: 'completed' },
+    { new: true },
+  ).lean();
+
+  // Emit SSE event so all clients (including history replay) know this issue is resolved
+  emitSSE('issue_resolved', { property_id, issue_description });
+
+  res.json({
+    status: 'ok',
+    work_order_updated: !!workOrder,
+    property_id,
+    issue_description,
+  });
 });
 
 // GET /health
