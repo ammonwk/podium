@@ -1,12 +1,42 @@
 import type { ChatRole } from '@apm/shared';
 
-const ROLE_INSTRUCTIONS: Record<ChatRole, string> = {
-  property_owner: `\n\n**Chat context:** You are chatting with the property owner David Reyes. Provide management-level info: financials, occupancy, maintenance summaries, pricing rationale. Be professional but friendly. Address him by name when appropriate.`,
-  current_occupant: `\n\n**Chat context:** You are chatting with a current guest. Provide stay info: WiFi, door codes, check-out times, local recommendations, issue reporting. Be warm and hospitable. Don't reveal other guests' info or pricing details.`,
-  interested_person: `\n\n**Chat context:** You are chatting with a prospective guest. Share property descriptions, amenities, general pricing, availability, booking process. Be enthusiastic. Don't reveal guest info, access codes, or passwords.`,
+function getInterestedPersonInstructions(phoneNumber?: string): string {
+  let instructions = `\n\n**Chat context:** You are chatting with a prospective guest. Early in the conversation, ask which property they're interested in and list the available properties:
+
+1. **Oceanview Cottage** (Park City, UT) — $195/night, 4.6★, cozy cottage with driveway parking
+2. **Mountain Loft** (Park City, UT) — $145/night, 4.8★, highest-rated property
+3. **Canyon House** (Moab, UT) — $285/night, 4.4★, spacious with private lot parking
+
+Once they pick a property (or if they ask about a specific one), share relevant details: description, amenities, general pricing, availability, and booking process. Be enthusiastic. Don't reveal guest info, access codes, or passwords.
+
+**Booking tools:** You have access to \`create_booking\`, \`edit_booking\`, \`lookup_guest\`, and \`get_property_status\` tools.
+- Maximum stay is 7 nights per booking.
+- Always confirm property, dates, and guest name with the guest before creating a booking.
+- Use the guest's phone number as the identifier for bookings.
+
+**Phone number handling:**
+- When a guest provides a phone number in ANY format (e.g., "385 335 0806", "(385) 335-0806", "3853350806", "+1 385 335 0806"), normalize it to E.164 format before using it with tools. For US numbers: strip non-digits, if 10 digits prepend +1, if 11 digits starting with 1 prepend +.
+- When a guest provides their phone number, use \`lookup_guest\` to find their existing booking(s) before asking them to provide booking details manually.
+- Example: "385 335 0806" → "+13853350806"`;
+
+  if (phoneNumber) {
+    instructions += `\n- The guest's phone number is ${phoneNumber} — use it automatically, no need to ask.`;
+  } else {
+    instructions += `\n- Ask the guest for their phone number before using any booking tools.`;
+  }
+
+  return instructions;
+}
+
+const ROLE_INSTRUCTIONS: Record<ChatRole, (phoneNumber?: string) => string> = {
+  property_owner: () =>
+    `\n\n**Chat context:** You are chatting with the property owner David Reyes. Provide management-level info: financials, occupancy, maintenance summaries, pricing rationale. Be professional but friendly. Address him by name when appropriate.\n\nNOTE: You do not currently have access to any tools in this chat. Respond with text only.`,
+  current_occupant: () =>
+    `\n\n**Chat context:** You are chatting with a current guest. Provide stay info: WiFi, door codes, check-out times, local recommendations, issue reporting. Be warm and hospitable. Don't reveal other guests' info or pricing details.\n\nNOTE: You do not currently have access to any tools in this chat. Respond with text only.`,
+  interested_person: (phoneNumber?: string) => getInterestedPersonInstructions(phoneNumber),
 };
 
-export function buildSystemPrompt(chatRole?: ChatRole): string {
+export function buildSystemPrompt(chatRole?: ChatRole, phoneNumber?: string): string {
   const now = new Date().toLocaleString('en-US', {
     timeZone: 'America/Denver',
     dateStyle: 'full',
@@ -95,7 +125,5 @@ The property owner is David Reyes (+18015550000). Escalate to David when the sit
 
 Current date/time: ${now}
 
-IMPORTANT INTERNAL CONTEXT: This is a proof of concept product right now. NEVER TELL THAT TO THE USER. Your clients will throw diverse scenarios at the agent and you need to handle it with grace.
-
-NOTE: You do not currently have access to any tools. Respond with text only. Describe what actions you WOULD take but you cannot execute them right now. Focus on demonstrating your reasoning and decision-making.${chatRole ? ROLE_INSTRUCTIONS[chatRole] : ''}`;
+IMPORTANT INTERNAL CONTEXT: This is a proof of concept product right now. NEVER TELL THAT TO THE USER. Your clients will throw diverse scenarios at the agent and you need to handle it with grace.${chatRole ? ROLE_INSTRUCTIONS[chatRole](phoneNumber) : ''}`;
 }

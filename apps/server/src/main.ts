@@ -20,18 +20,21 @@ import type { IncomingEvent, DemoEvent, SurgeWebhookPayload, ChatRequest, LLMMes
 import { AGENT_CONFIG, PROVIDERS } from '@apm/shared';
 import { connectDB, seed } from './shared/db.js';
 import { addClient, emitSSE } from './shared/sse.js';
-import {
-  conversationHistory,
-  resetState,
-  getConversationHistory,
-} from './shared/state.js';
+import type { LaneContext } from './shared/sse.js';
+import { resetState } from './shared/state.js';
 import { cancelAll as cancelAllTasks } from './shared/scheduler.js';
 import { getProviderConfig, setProvider } from './shared/llm/client.js';
-import { runAgentLoop } from './agent/orchestrator.js';
-import { runChatLoop } from './agent/chat-orchestrator.js';
-import { formatEvent } from './agent/format-event.js';
+import { runLoop } from './agent/orchestrator.js';
+import { createDashboardEmitter, createChatEmitter } from './agent/emitters.js';
+import { formatEvent, wrapUntrustedInput } from './agent/format-event.js';
 import { addChatClient, clearAllChatClients } from './shared/chat-sse.js';
 import { setHandleEventCallback } from './tools/schedule-task.js';
+import { laneManager, DEMO_LANE_ID } from './shared/lane-manager.js';
+import type { ConversationType } from './shared/lane-manager.js';
+import { getOwnerSettings, setOwnerSettings } from './shared/owner-settings.js';
+import { buildSystemPrompt } from './agent/system-prompt.js';
+import { ALL_TOOLS, CHAT_BOOKING_TOOLS, NO_TOOLS } from './tools/definitions.js';
+import { normalizePhone } from './shared/phone-utils.js';
 
 // ─── Express App ──────────────────────────────────────────────────────────────
 
@@ -41,68 +44,71 @@ app.use(express.json());
 
 const PORT = parseInt(process.env.PORT || '8000', 10);
 
-// ─── Event Queue (promise-chain serialization) ──────────────────────────────
+// ─── Lane-Based Event Handling ───────────────────────────────────────────────
 
-let eventQueue: Promise<void> = Promise.resolve();
-let queueDepth = 0;
-
-async function handleEvent(event: IncomingEvent): Promise<void> {
-  const history = getConversationHistory();
+async function handleEvent(event: IncomingEvent, laneId: string, laneType: ConversationType): Promise<void> {
+  const lane = laneManager.getOrCreate(laneId, laneType);
+  const laneContext: LaneContext = { conversation_id: laneId, conversation_type: laneType };
 
   // Format the event into a user message
   const formattedMessage = await formatEvent(event);
 
   console.log(
-    `[QUEUE] Processing event: "${event.name}" (source: ${event.source})`,
+    `[LANE:${laneId}] Processing event: "${event.name}" (source: ${event.source})`,
   );
 
-  // Push user message to conversation history
-  history.push({
+  // Push user message to lane's history
+  lane.history.push({
     role: 'user',
     content: formattedMessage,
   });
 
   // Run the agent loop
-  await runAgentLoop(history, event.name, event.source);
+  await runLoop(lane.history, {
+    label: `LANE:${laneId}`,
+    eventName: event.name,
+    maxIterations: AGENT_CONFIG.MAX_ITERATIONS,
+    tools: ALL_TOOLS,
+    systemPrompt: buildSystemPrompt(),
+    emitter: createDashboardEmitter(laneContext),
+  });
 }
 
-function enqueueEvent(event: IncomingEvent): void {
-  queueDepth++;
-  const position = queueDepth;
+function enqueueEvent(event: IncomingEvent, laneId: string, laneType: ConversationType): void {
+  const laneContext: LaneContext = { conversation_id: laneId, conversation_type: laneType };
 
   // Emit queued event immediately so dashboard can show it
   emitSSE('event_queued', {
     event_name: event.name,
     source: event.source,
-    position,
-  });
+  }, laneContext);
 
   console.log(
-    `[QUEUE] Event queued: "${event.name}" (position: ${position})`,
+    `[LANE:${laneId}] Event queued: "${event.name}"`,
   );
 
-  // Chain onto the promise queue — never run two handleEvent() concurrently
-  eventQueue = eventQueue
-    .then(() => handleEvent(event))
-    .catch((err) => {
-      console.error(`[QUEUE] Error processing event "${event.name}":`, err);
+  // Chain onto this lane's queue — events in the same lane run serially,
+  // but different lanes run concurrently
+  laneManager.enqueue(laneId, laneType, async () => {
+    try {
+      await handleEvent(event, laneId, laneType);
+    } catch (err: any) {
+      console.error(`[LANE:${laneId}] Error processing event "${event.name}":`, err);
       emitSSE('error', {
         message: `Error processing "${event.name}": ${err.message || 'Unknown error'}`,
-      });
-    })
-    .finally(() => {
-      queueDepth--;
-    });
+      }, laneContext);
+    }
+  });
 }
 
 // Register the callback for scheduled tasks (avoids circular imports)
 setHandleEventCallback((event) => {
-  enqueueEvent(event);
+  enqueueEvent(event, DEMO_LANE_ID, 'demo');
 });
 
 // ─── Chat Sessions ──────────────────────────────────────────────────────────
 
-const chatSessions = new Map<string, LLMMessage[]>();
+const chatSessions = new Map<string, { history: LLMMessage[]; phoneNumber?: string }>();
 
 // ─── SMS Rate Limiter ───────────────────────────────────────────────────────
 
@@ -161,7 +167,7 @@ app.post('/events', (req, res) => {
     return;
   }
 
-  enqueueEvent(event);
+  enqueueEvent(event, DEMO_LANE_ID, 'demo');
   res.json({ status: 'queued', event_name: event.name });
 });
 
@@ -199,7 +205,8 @@ app.post('/surge/webhook', (req, res) => {
     },
   };
 
-  enqueueEvent(event);
+  // Route to a per-phone-number lane for concurrent processing
+  enqueueEvent(event, from, 'caller');
   res.json({ status: 'queued', event_name: event.name });
 });
 
@@ -224,25 +231,37 @@ app.get('/chat/stream', (req, res) => {
 
 // POST /chat — Send chat message
 app.post('/chat', (req, res) => {
-  const { message, role, sessionId } = req.body as ChatRequest;
+  const { message, role, sessionId, phoneNumber } = req.body as ChatRequest;
 
   if (!message || !role || !sessionId) {
     res.status(400).json({ error: 'Missing message, role, or sessionId' });
     return;
   }
 
-  // Get or create session history
-  let history = chatSessions.get(sessionId);
-  if (!history) {
-    history = [];
-    chatSessions.set(sessionId, history);
+  // Get or create session
+  let session = chatSessions.get(sessionId);
+  if (!session) {
+    session = { history: [], phoneNumber };
+    chatSessions.set(sessionId, session);
+  } else if (phoneNumber && !session.phoneNumber) {
+    session.phoneNumber = phoneNumber;
   }
 
-  // Push user message
-  history.push({ role: 'user', content: message });
+  // Wrap user message in untrusted-input tags (same defense as SMS path)
+  session.history.push({ role: 'user', content: wrapUntrustedInput(message) });
 
-  // Run chat loop in background (streaming via SSE)
-  runChatLoop(history, role, sessionId).catch((err) => {
+  // Run unified loop in background (streaming via SSE)
+  const normalizedPhone = session.phoneNumber ? normalizePhone(session.phoneNumber) : undefined;
+  const tools = role === 'interested_person' ? CHAT_BOOKING_TOOLS : NO_TOOLS;
+
+  runLoop(session.history, {
+    label: `CHAT:${sessionId}`,
+    eventName: `chat-${sessionId}`,
+    maxIterations: AGENT_CONFIG.CHAT_MAX_ITERATIONS,
+    tools,
+    systemPrompt: buildSystemPrompt(role, normalizedPhone || session.phoneNumber),
+    emitter: createChatEmitter(sessionId),
+  }).catch((err) => {
     console.error('[CHAT] Error:', err);
   });
 
@@ -274,7 +293,7 @@ app.post('/reset', async (_req, res) => {
     // Cancel all pending tasks
     cancelAllTasks();
 
-    // Reset conversation history
+    // Reset all conversation lanes
     resetState();
 
     // Clear SMS rate limiter
@@ -283,10 +302,6 @@ app.post('/reset', async (_req, res) => {
     // Clear chat sessions
     chatSessions.clear();
     clearAllChatClients();
-
-    // Reset queue
-    eventQueue = Promise.resolve();
-    queueDepth = 0;
 
     // Re-seed database
     await seed();
@@ -300,6 +315,29 @@ app.post('/reset', async (_req, res) => {
     console.error('[RESET] Error:', err);
     res.status(500).json({ error: err.message || 'Reset failed' });
   }
+});
+
+// GET /settings/owner
+app.get('/settings/owner', (_req, res) => {
+  res.json(getOwnerSettings());
+});
+
+// PUT /settings/owner
+app.put('/settings/owner', (req, res) => {
+  const { name, phone } = req.body || {};
+
+  if (!name || !phone) {
+    res.status(400).json({ error: 'Missing name or phone' });
+    return;
+  }
+
+  if (!/^\+\d{7,15}$/.test(phone)) {
+    res.status(400).json({ error: 'Invalid phone format. Use E.164 (e.g. +18015550000)' });
+    return;
+  }
+
+  setOwnerSettings(name, phone);
+  res.json({ status: 'ok', ...getOwnerSettings() });
 });
 
 // GET /health

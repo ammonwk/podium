@@ -29,6 +29,7 @@ const propertySchema = new Schema<Property>({
 });
 
 const bookingSchema = new Schema<Booking>({
+  id: { type: String, required: true, unique: true },
   property_id: { type: String, required: true },
   guest_name: { type: String, required: true },
   guest_phone: { type: String, required: true },
@@ -217,6 +218,7 @@ export async function seed(): Promise<void> {
 
   await BookingModel.insertMany([
     {
+      id: 'BOOK_001',
       property_id: PROPERTY_IDS.OCEANVIEW_COTTAGE,
       guest_name: 'Sarah Chen',
       guest_phone: PHONE_NUMBERS.SARAH_CHEN,
@@ -225,6 +227,7 @@ export async function seed(): Promise<void> {
       status: 'active',
     },
     {
+      id: 'BOOK_002',
       property_id: PROPERTY_IDS.MOUNTAIN_LOFT,
       guest_name: 'James Wright',
       guest_phone: PHONE_NUMBERS.JAMES_WRIGHT,
@@ -233,6 +236,7 @@ export async function seed(): Promise<void> {
       status: 'active',
     },
     {
+      id: 'BOOK_003',
       property_id: PROPERTY_IDS.CANYON_HOUSE,
       guest_name: 'Lisa Kim',
       guest_phone: PHONE_NUMBERS.LISA_KIM,
@@ -241,6 +245,7 @@ export async function seed(): Promise<void> {
       status: 'active',
     },
     {
+      id: 'BOOK_004',
       property_id: PROPERTY_IDS.OCEANVIEW_COTTAGE,
       guest_name: 'Mike Torres',
       guest_phone: PHONE_NUMBERS.MIKE_TORRES,
@@ -249,6 +254,7 @@ export async function seed(): Promise<void> {
       status: 'upcoming',
     },
     {
+      id: 'BOOK_005',
       property_id: PROPERTY_IDS.MOUNTAIN_LOFT,
       guest_name: 'Anna Park',
       guest_phone: PHONE_NUMBERS.ANNA_PARK,

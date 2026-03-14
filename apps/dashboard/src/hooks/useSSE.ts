@@ -155,7 +155,13 @@ function createInitialState(): DashboardState {
     isProcessing: false,
     demoPhase: 'idle',
     error: null,
-    providerConfig: { provider: 'anthropic', model: 'claude-opus-4-6' },
+    providerConfig: (() => {
+      try {
+        const saved = localStorage.getItem('providerConfig');
+        if (saved) return JSON.parse(saved);
+      } catch {}
+      return { provider: 'anthropic', model: 'claude-opus-4-6' };
+    })(),
     demoEventIndex: 0,
   };
 }
@@ -490,6 +496,24 @@ export function useSSE(): DashboardState & {
 
   useEffect(() => {
     connect();
+
+    // Sync server with saved provider preference
+    const saved = localStorage.getItem('providerConfig');
+    if (saved) {
+      try {
+        const config = JSON.parse(saved);
+        fetch(`${getServerUrl()}/api/provider`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: saved,
+        }).then(resp => {
+          if (resp.ok) {
+            setState(prev => ({ ...prev, providerConfig: config }));
+          }
+        }).catch(() => {});
+      } catch {}
+    }
+
     return () => {
       if (eventSourceRef.current) eventSourceRef.current.close();
       if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
@@ -592,10 +616,11 @@ export function useSSE(): DashboardState & {
       });
       if (resp.ok) {
         const data = await resp.json();
-        const config = data.provider || data;
+        const providerConfig = { provider: data.provider, model: data.model };
+        localStorage.setItem('providerConfig', JSON.stringify(providerConfig));
         setState(prev => ({
           ...prev,
-          providerConfig: { provider: config.provider, model: config.model },
+          providerConfig,
         }));
       }
     } catch (err) {

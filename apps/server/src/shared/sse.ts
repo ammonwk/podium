@@ -1,6 +1,12 @@
 import { v4 as uuid } from 'uuid';
 import type { Response } from 'express';
 import type { SSEEventType } from '@apm/shared';
+import type { ConversationType } from './lane-manager.js';
+
+export interface LaneContext {
+  conversation_id: string;
+  conversation_type: ConversationType;
+}
 
 const clients = new Set<Response>();
 
@@ -14,7 +20,7 @@ export function addClient(res: Response): void {
   });
 }
 
-export function emitSSE(type: SSEEventType, payload: unknown): void {
+export function emitSSE(type: SSEEventType, payload: unknown, laneContext?: LaneContext): void {
   const id = uuid();
   const timestamp = new Date().toISOString();
 
@@ -25,6 +31,7 @@ export function emitSSE(type: SSEEventType, payload: unknown): void {
     type,
     timestamp,
     ...(payload as Record<string, unknown>),
+    ...(laneContext ? { conversation_id: laneContext.conversation_id, conversation_type: laneContext.conversation_type } : {}),
   });
   const message = `id: ${id}\nevent: ${type}\ndata: ${data}\n\n`;
 

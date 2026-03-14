@@ -1,13 +1,6 @@
-import type { LLMMessage } from '@apm/shared';
-
-export let conversationHistory: LLMMessage[] = [];
+import { laneManager } from './lane-manager.js';
 
 export function resetState(): void {
-  conversationHistory = [];
-  console.log('[STATE] Conversation history cleared');
-}
-
-/** Expose the reference so the orchestrator can push to it. */
-export function getConversationHistory(): LLMMessage[] {
-  return conversationHistory;
+  laneManager.resetAll();
+  console.log('[STATE] All conversation lanes cleared');
 }

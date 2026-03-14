@@ -1,5 +1,6 @@
 import React, { useState, useCallback, Component } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
+import { SettingsModal } from './components/SettingsModal';
 import { THEME } from '@apm/shared';
 import { RADIUS, SHADOW, ANIMATION } from './styles/theme';
 import { useSSE } from './hooks/useSSE';
@@ -82,6 +83,7 @@ const App: React.FC = () => {
   const state = useSSE();
   const [drilldown, setDrilldown] = useState<DrilldownData>(null);
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
 
   const closeDrilldown = useCallback(() => setDrilldown(null), []);
 
@@ -144,6 +146,13 @@ const App: React.FC = () => {
           </div>
 
           <div style={styles.navRight}>
+            <button
+              style={styles.settingsButton}
+              onClick={() => setShowSettings(true)}
+              title="Owner Settings"
+            >
+              ⚙
+            </button>
             <ProviderToggle
               providerConfig={state.providerConfig}
               onSwitch={state.switchProvider}
@@ -191,6 +200,9 @@ const App: React.FC = () => {
 
         {/* ─── Bottom Bar ─────────────────────────────────────────────── */}
         <FinancialBar financials={state.financials} />
+
+        {/* ─── Settings Modal ──────────────────────────────────────────── */}
+        <SettingsModal open={showSettings} onClose={() => setShowSettings(false)} />
 
         {/* ─── Error Banner ───────────────────────────────────────────── */}
         {state.error && (
@@ -285,6 +297,21 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: '12px',
   },
+  settingsButton: {
+    width: '36px',
+    height: '36px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'none',
+    border: `1px solid ${THEME.bg.border}`,
+    borderRadius: RADIUS.sm,
+    color: THEME.text.secondary,
+    fontSize: '18px',
+    cursor: 'pointer',
+    fontFamily: THEME.font.sans,
+    transition: `all ${ANIMATION.fast} ${ANIMATION.easeOut}`,
+  },
 
   // Main content — single column, centered
   mainContent: {
@@ -300,6 +327,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     overflow: 'hidden',
     padding: '0 24px',
+    marginTop: '24px',
   },
 
   // Error

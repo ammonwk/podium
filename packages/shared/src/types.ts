@@ -13,6 +13,7 @@ export interface ChatRequest {
   message: string;
   role: ChatRole;
   sessionId: string;
+  phoneNumber?: string;
 }
 
 // ─── Database Models ─────────────────────────────────────────────────────────
@@ -34,6 +35,7 @@ export interface Property {
 }
 
 export interface Booking {
+  id: string;
   property_id: string;
   guest_name: string;
   guest_phone: string;
@@ -138,6 +140,28 @@ export interface ScheduleTaskInput {
   priority: 'low' | 'medium' | 'high';
 }
 
+export interface CreateBookingInput {
+  property_id: string;
+  guest_name: string;
+  guest_phone: string;
+  check_in: string;
+  check_out: string;
+}
+
+export interface GetPropertyStatusInput {
+  property_id?: string;
+  check_availability_start?: string;
+  check_availability_end?: string;
+}
+
+export interface EditBookingInput {
+  guest_phone: string;
+  property_id?: string;
+  new_check_in?: string;
+  new_check_out?: string;
+  new_property_id?: string;
+}
+
 // ─── Tool Results ────────────────────────────────────────────────────────────
 
 export interface SendSmsResult {
@@ -200,6 +224,57 @@ export interface ScheduleTaskResult {
   scheduled_time: string;
   description: string;
   fires_in: string;
+}
+
+export interface CreateBookingResult {
+  booking_id: string;
+  property_name: string;
+  guest_name: string;
+  guest_phone: string;
+  check_in: string;
+  check_out: string;
+  nights: number;
+  nightly_rate: number;
+  total_estimate: number;
+}
+
+export interface EditBookingResult {
+  booking_id: string;
+  property_name: string;
+  changes: string;
+  check_in: string;
+  check_out: string;
+  nights: number;
+}
+
+export interface PropertyStatusResult {
+  properties: PropertyStatusEntry[];
+}
+
+export interface PropertyStatusEntry {
+  property_id: string;
+  property_name: string;
+  location: string;
+  current_price: number;
+  rating: number;
+  bookings: Array<{
+    id: string;
+    guest_name: string;
+    status: string;
+    check_in: string;
+    check_out: string;
+  }>;
+  schedule_events: Array<{
+    event_type: string;
+    start_time: string;
+    end_time: string;
+    notes?: string;
+  }>;
+  available_windows: Array<{
+    start: string;
+    end: string;
+    max_nights: number;
+  }>;
 }
 
 // ─── SSE Events ──────────────────────────────────────────────────────────────

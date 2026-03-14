@@ -1,4 +1,5 @@
 import type { LLMToolDefinition } from '@apm/shared';
+import { TOOL_NAMES } from '@apm/shared';
 
 export const toolDefinitions: LLMToolDefinition[] = [
   {
@@ -208,4 +209,120 @@ export const toolDefinitions: LLMToolDefinition[] = [
       },
     },
   },
+  {
+    name: 'create_booking',
+    description:
+      'Create a new booking for a guest at a property. Maximum stay is 7 nights. Returns booking confirmation with property details and price estimate. Will be rejected if dates overlap an existing booking on the same property.',
+    input_schema: {
+      type: 'object',
+      required: ['property_id', 'guest_name', 'guest_phone', 'check_in', 'check_out'],
+      properties: {
+        property_id: {
+          type: 'string',
+          description: 'Property ID (e.g., PROP_001)',
+        },
+        guest_name: {
+          type: 'string',
+          description: 'Full name of the guest',
+        },
+        guest_phone: {
+          type: 'string',
+          description: 'Guest phone number in E.164 format (e.g., +18015551234)',
+        },
+        check_in: {
+          type: 'string',
+          description: 'Check-in date/time in ISO 8601 format',
+        },
+        check_out: {
+          type: 'string',
+          description: 'Check-out date/time in ISO 8601 format',
+        },
+      },
+    },
+  },
+  {
+    name: 'edit_booking',
+    description:
+      'Edit an existing active or upcoming booking. Finds the booking by guest phone number. If the guest has multiple bookings, provide property_id to disambiguate. Maximum stay is 7 nights. Will be rejected if new dates overlap another booking.',
+    input_schema: {
+      type: 'object',
+      required: ['guest_phone'],
+      properties: {
+        guest_phone: {
+          type: 'string',
+          description: 'Guest phone number in E.164 format — used to find the booking',
+        },
+        property_id: {
+          type: 'string',
+          description: 'Property ID to disambiguate if the guest has multiple bookings',
+        },
+        new_check_in: {
+          type: 'string',
+          description: 'New check-in date/time in ISO 8601 format',
+        },
+        new_check_out: {
+          type: 'string',
+          description: 'New check-out date/time in ISO 8601 format',
+        },
+        new_property_id: {
+          type: 'string',
+          description: 'Move booking to a different property (property ID)',
+        },
+      },
+    },
+  },
+  {
+    name: 'lookup_guest',
+    description:
+      'Look up a guest\'s active or upcoming booking(s) by their phone number. Returns booking details including property, dates, and status. Use this when a guest provides their phone number and wants to check their reservation.',
+    input_schema: {
+      type: 'object',
+      required: ['guest_phone'],
+      properties: {
+        guest_phone: {
+          type: 'string',
+          description:
+            'Guest phone number in E.164 format (e.g., +13853350806). Normalize before calling.',
+        },
+      },
+    },
+  },
+  {
+    name: 'get_property_status',
+    description:
+      'Get current status of one or all properties including bookings, schedule events, and available date windows. Returns property details, active/upcoming bookings, scheduled events, and open windows for booking.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        property_id: {
+          type: 'string',
+          description:
+            'Property ID to filter to one property (e.g., PROP_001). Omit to get all properties.',
+        },
+        check_availability_start: {
+          type: 'string',
+          description:
+            'Start of date window to compute availability in ISO 8601 format. Defaults to today.',
+        },
+        check_availability_end: {
+          type: 'string',
+          description:
+            'End of date window to compute availability in ISO 8601 format. Defaults to 30 days from today.',
+        },
+      },
+    },
+  },
 ];
+
+export const ALL_TOOLS = toolDefinitions;
+
+export const CHAT_BOOKING_TOOLS: LLMToolDefinition[] = toolDefinitions.filter((t) =>
+  [
+    TOOL_NAMES.CREATE_BOOKING,
+    TOOL_NAMES.EDIT_BOOKING,
+    TOOL_NAMES.GET_PROPERTY_STATUS,
+    TOOL_NAMES.LOOKUP_GUEST,
+  ].includes(t.name as any),
+);
+
+export const NO_TOOLS: LLMToolDefinition[] = [];
