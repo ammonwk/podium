@@ -54,6 +54,9 @@ function summarizeToolResult(toolName: string, result: Record<string, unknown>, 
   if (toolName === 'report_maintenance_issue') {
     return `${result.property_name}: ${result.severity} issue reported (${result.status})`;
   }
+  if (toolName === 'escalate_to_owner') {
+    return `Escalated to owner: ${result.summary_sent}`;
+  }
 
   // Fallback: show first few keys
   const keys = Object.keys(result).slice(0, 3);
@@ -162,10 +165,14 @@ export const ChatWidget: React.FC = () => {
           toolCall: data,
         };
 
-        // Find the current streaming message — remove it, insert tool call, then re-add streaming
+        // Finalize the pre-tool streaming message, then append tool bubble
         const last = prev[prev.length - 1];
         if (last && last.role === 'assistant' && !last.toolCall && isStreamingMsg(last)) {
-          return [...prev.slice(0, -1), toolMsg, last];
+          const finalized = { ...last, id: last.id.replace('streaming-', '') };
+          if (!finalized.content.trim()) {
+            return [...prev.slice(0, -1), toolMsg];
+          }
+          return [...prev.slice(0, -1), finalized, toolMsg];
         }
         return [...prev, toolMsg];
       });

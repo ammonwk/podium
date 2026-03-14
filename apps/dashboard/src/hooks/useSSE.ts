@@ -1,9 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import {
-  DEMO_EVENTS,
-  SSE_EVENTS,
-  PROPERTY_IDS,
-} from '@apm/shared';
+import { useState, useEffect, useRef, useCallback } from "react";
+import { DEMO_EVENTS, SSE_EVENTS, PROPERTY_IDS } from "@apm/shared";
 import type {
   ThinkingPayload,
   ToolCallPayload,
@@ -12,7 +8,7 @@ import type {
   ScheduledTaskPayload,
   EventQueuedPayload,
   ErrorPayload,
-} from '@apm/shared';
+} from "@apm/shared";
 
 // ─── State Types ────────────────────────────────────────────────────────────
 
@@ -24,15 +20,15 @@ export interface TriggerMessage {
 
 export interface EventState {
   name: string;
-  source: 'human' | 'system' | 'self-scheduled';
-  status: 'queued' | 'active' | 'done';
+  source: "human" | "system" | "self-scheduled";
+  status: "queued" | "active" | "done";
   thinkingText: string;
   toolCalls: ToolCallData[];
   startedAt?: string;
   completedAt?: string;
   triggerMessage?: TriggerMessage;
   conversationId?: string;
-  conversationType?: 'demo' | 'caller';
+  conversationType?: "demo" | "caller";
 }
 
 export interface ToolCallData {
@@ -47,7 +43,14 @@ export interface ToolCallData {
 
 export interface ActivityItem {
   id: string;
-  type: 'sms_in' | 'sms_out' | 'price_change' | 'work_order' | 'schedule_change' | 'scheduled_task' | 'decision';
+  type:
+    | "sms_in"
+    | "sms_out"
+    | "price_change"
+    | "work_order"
+    | "schedule_change"
+    | "scheduled_task"
+    | "decision";
   timestamp: string;
   data: Record<string, unknown>;
   eventName: string;
@@ -67,7 +70,7 @@ export interface PropertyState {
   base_price: number;
   rating: number;
   review_count: number;
-  status: 'normal' | 'attention' | 'emergency';
+  status: "normal" | "attention" | "emergency";
   activeIssues: string[];
   schedule: ScheduleSegment[];
   guestFlow: string;
@@ -75,7 +78,7 @@ export interface PropertyState {
 }
 
 export interface ScheduleSegment {
-  type: 'checkout' | 'cleaning' | 'checkin' | 'maintenance';
+  type: "checkout" | "cleaning" | "checkin" | "maintenance";
   start: number;
   end: number;
 }
@@ -84,7 +87,7 @@ export interface TaskState {
   task_id: string;
   description: string;
   fires_at: string;
-  status: 'pending' | 'fired';
+  status: "pending" | "fired";
 }
 
 export interface DashboardState {
@@ -95,7 +98,7 @@ export interface DashboardState {
   financials: { revenue: number; costs: number; decisions: number };
   upcomingTasks: TaskState[];
   isProcessing: boolean;
-  demoPhase: 'idle' | 'running' | 'self-managing';
+  demoPhase: "idle" | "running" | "self-managing";
   error: string | null;
   providerConfig: { provider: string; model: string };
   demoEventIndex: number;
@@ -114,60 +117,80 @@ function bookingDate(daysOffset: number, hours: number): string {
 const INITIAL_PROPERTIES: PropertyState[] = [
   {
     id: PROPERTY_IDS.OCEANVIEW_COTTAGE,
-    name: 'Oceanview Cottage',
-    location: 'Park City, UT',
+    name: "Oceanview Cottage",
+    location: "Park City, UT",
     current_price: 195,
     base_price: 195,
     rating: 4.6,
     review_count: 127,
-    status: 'normal',
+    status: "normal",
     activeIssues: [],
     schedule: [
-      { type: 'checkout', start: 0, end: 25 },
-      { type: 'cleaning', start: 25, end: 45 },
-      { type: 'checkin', start: 60, end: 80 },
+      { type: "checkout", start: 0, end: 25 },
+      { type: "cleaning", start: 25, end: 45 },
+      { type: "checkin", start: 60, end: 80 },
     ],
-    guestFlow: 'Sarah → Mike',
+    guestFlow: "Sarah → Mike",
     bookings: [
-      { guestName: 'Sarah Chen', checkIn: bookingDate(-3, 15), checkOut: bookingDate(1, 11) },
-      { guestName: 'Mike Torres', checkIn: bookingDate(1, 15), checkOut: bookingDate(6, 11) },
+      {
+        guestName: "Sarah Chen",
+        checkIn: bookingDate(-3, 15),
+        checkOut: bookingDate(1, 11),
+      },
+      {
+        guestName: "Mike Torres",
+        checkIn: bookingDate(1, 15),
+        checkOut: bookingDate(6, 11),
+      },
     ],
   },
   {
     id: PROPERTY_IDS.MOUNTAIN_LOFT,
-    name: 'Mountain Loft',
-    location: 'Park City, UT',
+    name: "Mountain Loft",
+    location: "Park City, UT",
     current_price: 145,
     base_price: 145,
     rating: 4.8,
     review_count: 89,
-    status: 'normal',
+    status: "normal",
     activeIssues: [],
     schedule: [
-      { type: 'checkout', start: 0, end: 20 },
-      { type: 'cleaning', start: 20, end: 42 },
-      { type: 'checkin', start: 60, end: 80 },
+      { type: "checkout", start: 0, end: 20 },
+      { type: "cleaning", start: 20, end: 42 },
+      { type: "checkin", start: 60, end: 80 },
     ],
-    guestFlow: 'James → Anna',
+    guestFlow: "James → Anna",
     bookings: [
-      { guestName: 'James Wright', checkIn: bookingDate(-3, 15), checkOut: bookingDate(1, 10) },
-      { guestName: 'Anna Park', checkIn: bookingDate(1, 15), checkOut: bookingDate(6, 11) },
+      {
+        guestName: "James Wright",
+        checkIn: bookingDate(-3, 15),
+        checkOut: bookingDate(1, 10),
+      },
+      {
+        guestName: "Anna Park",
+        checkIn: bookingDate(1, 15),
+        checkOut: bookingDate(6, 11),
+      },
     ],
   },
   {
     id: PROPERTY_IDS.CANYON_HOUSE,
-    name: 'Canyon House',
-    location: 'Moab, UT',
+    name: "Canyon House",
+    location: "Moab, UT",
     current_price: 285,
     base_price: 285,
     rating: 4.4,
     review_count: 52,
-    status: 'normal',
+    status: "normal",
     activeIssues: [],
     schedule: [],
-    guestFlow: 'Lisa (mid-stay)',
+    guestFlow: "Lisa (mid-stay)",
     bookings: [
-      { guestName: 'Lisa Kim', checkIn: bookingDate(0, 15), checkOut: bookingDate(3, 11) },
+      {
+        guestName: "Lisa Kim",
+        checkIn: bookingDate(0, 15),
+        checkOut: bookingDate(3, 11),
+      },
     ],
   },
 ];
@@ -177,18 +200,23 @@ function createInitialState(): DashboardState {
     events: [],
     activeEventIndex: -1,
     activities: [],
-    properties: INITIAL_PROPERTIES.map(p => ({ ...p, schedule: [...p.schedule], activeIssues: [...p.activeIssues], bookings: [...p.bookings] })),
+    properties: INITIAL_PROPERTIES.map((p) => ({
+      ...p,
+      schedule: [...p.schedule],
+      activeIssues: [...p.activeIssues],
+      bookings: [...p.bookings],
+    })),
     financials: { revenue: 0, costs: 0, decisions: 0 },
     upcomingTasks: [],
     isProcessing: false,
-    demoPhase: 'idle',
+    demoPhase: "idle",
     error: null,
     providerConfig: (() => {
       try {
-        const saved = localStorage.getItem('providerConfig');
+        const saved = localStorage.getItem("providerConfig");
         if (saved) return JSON.parse(saved);
       } catch {}
-      return { provider: 'anthropic', model: 'claude-opus-4-6' };
+      return { provider: "anthropic", model: "claude-opus-4-6" };
     })(),
     demoEventIndex: 0,
   };
@@ -211,9 +239,12 @@ function applySSEEvent(
 ): DashboardState {
   switch (eventType) {
     case SSE_EVENTS.EVENT_QUEUED: {
-      const p = payload as unknown as EventQueuedPayload & { conversation_id?: string; conversation_type?: 'demo' | 'caller' };
+      const p = payload as unknown as EventQueuedPayload & {
+        conversation_id?: string;
+        conversation_type?: "demo" | "caller";
+      };
       // Don't add if already exists
-      if (prev.events.some(ev => ev.name === p.event_name)) {
+      if (prev.events.some((ev) => ev.name === p.event_name)) {
         return prev;
       }
 
@@ -231,8 +262,8 @@ function applySSEEvent(
       const newEvent: EventState = {
         name: p.event_name,
         source: p.source,
-        status: 'queued',
-        thinkingText: '',
+        status: "queued",
+        thinkingText: "",
         toolCalls: [],
         conversationId: p.conversation_id,
         conversationType: p.conversation_type,
@@ -245,7 +276,10 @@ function applySSEEvent(
     }
 
     case SSE_EVENTS.EVENT_START: {
-      const p = payload as unknown as EventStartPayload & { conversation_id?: string; conversation_type?: 'demo' | 'caller' };
+      const p = payload as unknown as EventStartPayload & {
+        conversation_id?: string;
+        conversation_type?: "demo" | "caller";
+      };
       // Attach trigger message if we stored one for this event
       const trigger = ctx.pendingTriggers.get(p.event_name);
       if (trigger) {
@@ -255,8 +289,8 @@ function applySSEEvent(
       const newEvent: EventState = {
         name: p.event_name,
         source: p.source,
-        status: 'active',
-        thinkingText: '',
+        status: "active",
+        thinkingText: "",
         toolCalls: [],
         startedAt: (payload.timestamp as string) || new Date().toISOString(),
         triggerMessage: trigger,
@@ -265,20 +299,23 @@ function applySSEEvent(
       };
       // Check if this event was already queued
       const existingIdx = prev.events.findIndex(
-        ev => ev.name === p.event_name && ev.status === 'queued'
+        (ev) => ev.name === p.event_name && ev.status === "queued",
       );
       let newEvents: EventState[];
       let newIndex: number;
       if (existingIdx >= 0) {
         newEvents = prev.events.map((ev, i) =>
-          i === existingIdx ? {
-            ...ev,
-            status: 'active' as const,
-            startedAt: (payload.timestamp as string) || new Date().toISOString(),
-            triggerMessage: trigger || ev.triggerMessage,
-            conversationId: p.conversation_id || ev.conversationId,
-            conversationType: p.conversation_type || ev.conversationType,
-          } : ev
+          i === existingIdx
+            ? {
+                ...ev,
+                status: "active" as const,
+                startedAt:
+                  (payload.timestamp as string) || new Date().toISOString(),
+                triggerMessage: trigger || ev.triggerMessage,
+                conversationId: p.conversation_id || ev.conversationId,
+                conversationType: p.conversation_type || ev.conversationType,
+              }
+            : ev,
         );
         newIndex = existingIdx;
       } else {
@@ -287,11 +324,12 @@ function applySSEEvent(
       }
 
       // Mark upcoming tasks as fired if this matches
-      const newTasks = prev.upcomingTasks.map(t =>
-        (t.description && p.event_name.includes(t.description.substring(0, 20))) ||
-        p.source === 'self-scheduled'
-          ? { ...t, status: 'fired' as const }
-          : t
+      const newTasks = prev.upcomingTasks.map((t) =>
+        (t.description &&
+          p.event_name.includes(t.description.substring(0, 20))) ||
+        p.source === "self-scheduled"
+          ? { ...t, status: "fired" as const }
+          : t,
       );
 
       return {
@@ -305,12 +343,17 @@ function applySSEEvent(
 
     case SSE_EVENTS.EVENT_DONE: {
       const p = payload as unknown as EventDonePayload;
-      const newEvents = prev.events.map(ev =>
-        ev.name === p.event_name && ev.status === 'active'
-          ? { ...ev, status: 'done' as const, completedAt: (payload.timestamp as string) || new Date().toISOString() }
-          : ev
+      const newEvents = prev.events.map((ev) =>
+        ev.name === p.event_name && ev.status === "active"
+          ? {
+              ...ev,
+              status: "done" as const,
+              completedAt:
+                (payload.timestamp as string) || new Date().toISOString(),
+            }
+          : ev,
       );
-      const stillProcessing = newEvents.some(ev => ev.status === 'active');
+      const stillProcessing = newEvents.some((ev) => ev.status === "active");
       return {
         ...prev,
         events: newEvents,
@@ -320,16 +363,18 @@ function applySSEEvent(
 
     case SSE_EVENTS.THINKING: {
       const p = payload as unknown as ThinkingPayload;
-      const newEvents = prev.events.map(ev =>
-        ev.name === p.event_name && ev.status === 'active'
+      const newEvents = prev.events.map((ev) =>
+        ev.name === p.event_name && ev.status === "active"
           ? { ...ev, thinkingText: ev.thinkingText + p.text }
-          : ev
+          : ev,
       );
       return { ...prev, events: newEvents };
     }
 
     case SSE_EVENTS.TOOL_CALL: {
-      const p = payload as unknown as ToolCallPayload & { conversation_id?: string };
+      const p = payload as unknown as ToolCallPayload & {
+        conversation_id?: string;
+      };
       const toolCall: ToolCallData = {
         id: `tc_${++ctx.activityCounter.value}_${Math.random().toString(36).slice(2, 7)}`,
         tool_name: p.tool_name,
@@ -341,10 +386,10 @@ function applySSEEvent(
       };
 
       // Add tool call to active event
-      const newEvents = prev.events.map(ev =>
-        ev.name === p.event_name && ev.status === 'active'
+      const newEvents = prev.events.map((ev) =>
+        ev.name === p.event_name && ev.status === "active"
           ? { ...ev, toolCalls: [...ev.toolCalls, toolCall] }
-          : ev
+          : ev,
       );
 
       // Create activity item
@@ -356,78 +401,86 @@ function applySSEEvent(
       let newFinancials = { ...prev.financials };
 
       switch (p.tool_name) {
-        case 'send_sms': {
+        case "send_sms": {
           const result = p.result as Record<string, unknown>;
           const input = p.input as Record<string, unknown>;
           newActivities.unshift({
             id: actId,
-            type: 'sms_out',
-            timestamp: (payload.timestamp as string) || new Date().toISOString(),
+            type: "sms_out",
+            timestamp:
+              (payload.timestamp as string) || new Date().toISOString(),
             data: { ...input, ...result },
             eventName: p.event_name,
           });
           break;
         }
 
-        case 'create_work_order': {
+        case "create_work_order": {
           const result = p.result as Record<string, unknown>;
           const input = p.input as Record<string, unknown>;
           newActivities.unshift({
             id: actId,
-            type: 'work_order',
-            timestamp: (payload.timestamp as string) || new Date().toISOString(),
+            type: "work_order",
+            timestamp:
+              (payload.timestamp as string) || new Date().toISOString(),
             data: { ...input, ...result },
             eventName: p.event_name,
           });
           const propId = input.property_id as string;
           const severity = input.severity as string;
-          newProperties = prev.properties.map(p =>
+          newProperties = prev.properties.map((p) =>
             p.id === propId
               ? {
                   ...p,
-                  status: severity === 'emergency' ? 'emergency' as const : 'attention' as const,
-                  activeIssues: [...p.activeIssues, input.issue_description as string],
+                  status:
+                    severity === "emergency"
+                      ? ("emergency" as const)
+                      : ("attention" as const),
+                  activeIssues: [
+                    ...p.activeIssues,
+                    input.issue_description as string,
+                  ],
                 }
-              : p
+              : p,
           );
           const cost = (input.estimated_cost as number) || 0;
           newFinancials.costs += cost;
           break;
         }
 
-        case 'adjust_price': {
+        case "adjust_price": {
           const result = p.result as Record<string, unknown>;
           const input = p.input as Record<string, unknown>;
           newActivities.unshift({
             id: actId,
-            type: 'price_change',
-            timestamp: (payload.timestamp as string) || new Date().toISOString(),
+            type: "price_change",
+            timestamp:
+              (payload.timestamp as string) || new Date().toISOString(),
             data: { ...input, ...result },
             eventName: p.event_name,
           });
           const propId = input.property_id as string;
           const newPrice = input.new_price as number;
-          newProperties = prev.properties.map(p =>
-            p.id === propId
-              ? { ...p, current_price: newPrice }
-              : p
+          newProperties = prev.properties.map((p) =>
+            p.id === propId ? { ...p, current_price: newPrice } : p,
           );
-          const prop = prev.properties.find(p => p.id === propId);
+          const prop = prev.properties.find((p) => p.id === propId);
           if (prop) {
             const prevDelta = prop.current_price - prop.base_price;
             const newDelta = newPrice - prop.base_price;
-            newFinancials.revenue += (newDelta - prevDelta);
+            newFinancials.revenue += newDelta - prevDelta;
           }
           break;
         }
 
-        case 'log_decision': {
+        case "log_decision": {
           const result = p.result as Record<string, unknown>;
           const input = p.input as Record<string, unknown>;
           newActivities.unshift({
             id: actId,
-            type: 'decision',
-            timestamp: (payload.timestamp as string) || new Date().toISOString(),
+            type: "decision",
+            timestamp:
+              (payload.timestamp as string) || new Date().toISOString(),
             data: { ...input, ...result },
             eventName: p.event_name,
           });
@@ -435,60 +488,67 @@ function applySSEEvent(
           break;
         }
 
-        case 'get_market_data': {
+        case "get_market_data": {
           break;
         }
 
-        case 'update_schedule': {
+        case "update_schedule": {
           const result = p.result as Record<string, unknown>;
           const input = p.input as Record<string, unknown>;
           newActivities.unshift({
             id: actId,
-            type: 'schedule_change',
-            timestamp: (payload.timestamp as string) || new Date().toISOString(),
+            type: "schedule_change",
+            timestamp:
+              (payload.timestamp as string) || new Date().toISOString(),
             data: { ...input, ...result },
             eventName: p.event_name,
           });
           break;
         }
 
-        case 'schedule_task': {
+        case "schedule_task": {
           const result = p.result as Record<string, unknown>;
           const input = p.input as Record<string, unknown>;
           newActivities.unshift({
             id: actId,
-            type: 'scheduled_task',
-            timestamp: (payload.timestamp as string) || new Date().toISOString(),
+            type: "scheduled_task",
+            timestamp:
+              (payload.timestamp as string) || new Date().toISOString(),
             data: { ...input, ...result },
             eventName: p.event_name,
           });
           break;
         }
 
-        case 'create_booking': {
-          const result = p.result as Record<string, unknown>;
+        case "create_booking": {
           const input = p.input as Record<string, unknown>;
+          const result = p.result as Record<string, unknown>;
+          const propId = input.property_id as string;
+          newProperties = prev.properties.map((prop) =>
+            prop.id === propId
+              ? {
+                  ...prop,
+                  bookings: [
+                    ...prop.bookings,
+                    {
+                      guestName:
+                        (result.guest_name as string) ||
+                        (input.guest_name as string),
+                      checkIn: result.check_in as string,
+                      checkOut: result.check_out as string,
+                    },
+                  ],
+                }
+              : prop,
+          );
           newActivities.unshift({
             id: actId,
-            type: 'booking',
-            timestamp: (payload.timestamp as string) || new Date().toISOString(),
+            type: "schedule_change",
+            timestamp:
+              (payload.timestamp as string) || new Date().toISOString(),
             data: { ...input, ...result },
             eventName: p.event_name,
           });
-          const propId = (input.property_id || result.property_id) as string;
-          const guestName = (result.guest_name || input.guest_name) as string;
-          const checkIn = (result.check_in || input.check_in) as string;
-          const checkOut = (result.check_out || input.check_out) as string;
-          if (propId && checkIn && checkOut) {
-            newProperties = prev.properties.map(prop =>
-              prop.id === propId
-                ? {
-                    ...prop,
-                    bookings: [...prop.bookings, { guestName: guestName || 'Guest', checkIn, checkOut }],
-                  }
-                : prop
-            );
-          }
           break;
         }
       }
@@ -508,7 +568,7 @@ function applySSEEvent(
         task_id: p.task_id,
         description: p.description,
         fires_at: p.fires_at,
-        status: 'pending',
+        status: "pending",
       };
       return {
         ...prev,
@@ -534,7 +594,7 @@ function applySSEEvent(
 
 function getServerUrl(): string {
   // In dev mode, Vite proxy handles /events/stream and /api routes
-  return '';
+  return "";
 }
 
 // ─── Hook ───────────────────────────────────────────────────────────────────
@@ -562,8 +622,8 @@ export function useSSE(): DashboardState & {
 
     // Hydrate from history before connecting to live stream
     fetch(`${serverUrl}/api/events/history`)
-      .then(resp => resp.ok ? resp.json() : null)
-      .then(data => {
+      .then((resp) => (resp.ok ? resp.json() : null))
+      .then((data) => {
         if (data?.events?.length) {
           // Build a reducer context for hydration
           const ctx: ReducerContext = {
@@ -575,7 +635,7 @@ export function useSSE(): DashboardState & {
           // For each event_queued with a guest_message source, use the trigger data
           // from the persisted SSE payload (real SMS) or fall back to DEMO_EVENTS
           for (const evt of data.events) {
-            if (evt.type === 'event_queued' && evt.source === 'human') {
+            if (evt.type === "event_queued" && evt.source === "human") {
               // Real inbound SMS: server includes trigger_from/trigger_body
               if (evt.trigger_from && evt.trigger_body) {
                 ctx.pendingTriggers.set(evt.event_name, {
@@ -585,17 +645,23 @@ export function useSSE(): DashboardState & {
                 });
               } else {
                 // Demo events: look up from hardcoded DEMO_EVENTS
-                const demoEvt = DEMO_EVENTS.find((d: any) => d.name === evt.event_name);
-                if (demoEvt && demoEvt.type === 'guest_message' && demoEvt.body) {
+                const demoEvt = DEMO_EVENTS.find(
+                  (d: any) => d.name === evt.event_name,
+                );
+                if (
+                  demoEvt &&
+                  demoEvt.type === "guest_message" &&
+                  demoEvt.body
+                ) {
                   ctx.pendingTriggers.set(evt.event_name, {
-                    from: demoEvt.from || '',
-                    body: demoEvt.body || '',
+                    from: demoEvt.from || "",
+                    body: demoEvt.body || "",
                     name: demoEvt.name,
                   });
-                } else if (demoEvt && demoEvt.type === 'market_alert') {
+                } else if (demoEvt && demoEvt.type === "market_alert") {
                   ctx.pendingTriggers.set(evt.event_name, {
-                    from: 'Market Alert',
-                    body: (demoEvt as any).message || '',
+                    from: "Market Alert",
+                    body: (demoEvt as any).message || "",
                     name: demoEvt.name,
                   });
                 }
@@ -610,14 +676,16 @@ export function useSSE(): DashboardState & {
 
           // Determine demoPhase from hydrated state
           if (hydrated.events.length > 0) {
-            const hasActive = hydrated.events.some(e => e.status === 'active');
-            const allDone = hydrated.events.every(e => e.status === 'done');
+            const hasActive = hydrated.events.some(
+              (e) => e.status === "active",
+            );
+            const allDone = hydrated.events.every((e) => e.status === "done");
             if (hasActive) {
-              hydrated.demoPhase = 'running';
+              hydrated.demoPhase = "running";
             } else if (allDone) {
-              hydrated.demoPhase = 'self-managing';
+              hydrated.demoPhase = "self-managing";
             } else {
-              hydrated.demoPhase = 'running';
+              hydrated.demoPhase = "running";
             }
             hydrated.demoEventIndex = DEMO_EVENTS.length - 1;
           }
@@ -628,15 +696,15 @@ export function useSSE(): DashboardState & {
           setState(hydrated);
         }
       })
-      .catch(err => {
-        console.error('[SSE] Failed to fetch history:', err);
+      .catch((err) => {
+        console.error("[SSE] Failed to fetch history:", err);
       });
 
     const es = new EventSource(`${serverUrl}/events/stream`);
     eventSourceRef.current = es;
 
     es.onopen = () => {
-      setState(prev => ({ ...prev, error: null }));
+      setState((prev) => ({ ...prev, error: null }));
     };
 
     es.onerror = () => {
@@ -670,7 +738,7 @@ export function useSSE(): DashboardState & {
     for (const type of sseTypes) {
       es.addEventListener(type, (e: MessageEvent) => {
         const payload = JSON.parse(e.data);
-        setState(prev => applySSEEvent(prev, type, payload, makeLiveCtx()));
+        setState((prev) => applySSEEvent(prev, type, payload, makeLiveCtx()));
       });
     }
   }, []);
@@ -679,19 +747,21 @@ export function useSSE(): DashboardState & {
     connect();
 
     // Sync server with saved provider preference
-    const saved = localStorage.getItem('providerConfig');
+    const saved = localStorage.getItem("providerConfig");
     if (saved) {
       try {
         const config = JSON.parse(saved);
         fetch(`${getServerUrl()}/api/provider`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: saved,
-        }).then(resp => {
-          if (resp.ok) {
-            setState(prev => ({ ...prev, providerConfig: config }));
-          }
-        }).catch(() => {});
+        })
+          .then((resp) => {
+            if (resp.ok) {
+              setState((prev) => ({ ...prev, providerConfig: config }));
+            }
+          })
+          .catch(() => {});
       } catch {}
     }
 
@@ -704,31 +774,31 @@ export function useSSE(): DashboardState & {
   // ─── Actions ──────────────────────────────────────────────────────────────
 
   const runDemo = useCallback(async () => {
-    setState(prev => ({ ...prev, demoPhase: 'running', demoEventIndex: 0 }));
+    setState((prev) => ({ ...prev, demoPhase: "running", demoEventIndex: 0 }));
     const serverUrl = getServerUrl();
     const BURST_DELAY_MS = 250; // stagger events by 250ms for a rapid burst
 
     // Fire all events rapidly — each goes to its own lane via phone number,
     // so they process concurrently on the server
     for (let i = 0; i < DEMO_EVENTS.length; i++) {
-      setState(prev => ({ ...prev, demoEventIndex: i }));
+      setState((prev) => ({ ...prev, demoEventIndex: i }));
 
       // Add inbound SMS activity + store trigger for event card
-      if (DEMO_EVENTS[i].type === 'guest_message' && DEMO_EVENTS[i].body) {
+      if (DEMO_EVENTS[i].type === "guest_message" && DEMO_EVENTS[i].body) {
         const triggerMsg: TriggerMessage = {
-          from: DEMO_EVENTS[i].from || '',
-          body: DEMO_EVENTS[i].body || '',
+          from: DEMO_EVENTS[i].from || "",
+          body: DEMO_EVENTS[i].body || "",
           name: DEMO_EVENTS[i].name,
         };
         pendingTriggersRef.current.set(DEMO_EVENTS[i].name, triggerMsg);
 
         const actId = `act_inbound_${++activityCounterRef.current}`;
-        setState(prev => ({
+        setState((prev) => ({
           ...prev,
           activities: [
             {
               id: actId,
-              type: 'sms_in' as const,
+              type: "sms_in" as const,
               timestamp: new Date().toISOString(),
               data: {
                 from: DEMO_EVENTS[i].from,
@@ -740,11 +810,11 @@ export function useSSE(): DashboardState & {
             ...prev.activities,
           ],
         }));
-      } else if (DEMO_EVENTS[i].type === 'market_alert') {
+      } else if (DEMO_EVENTS[i].type === "market_alert") {
         // Store market alert as trigger message too
         const triggerMsg: TriggerMessage = {
-          from: 'Market Alert',
-          body: (DEMO_EVENTS[i] as { message?: string }).message || '',
+          from: "Market Alert",
+          body: (DEMO_EVENTS[i] as { message?: string }).message || "",
           name: DEMO_EVENTS[i].name,
         };
         pendingTriggersRef.current.set(DEMO_EVENTS[i].name, triggerMsg);
@@ -752,28 +822,28 @@ export function useSSE(): DashboardState & {
 
       // Fire-and-forget — don't await the server response before sending the next
       fetch(`${serverUrl}/api/events`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(DEMO_EVENTS[i]),
-      }).catch(err => console.error('Failed to send demo event:', err));
+      }).catch((err) => console.error("Failed to send demo event:", err));
 
       // Short stagger between sends so the dashboard can show them arriving
       if (i < DEMO_EVENTS.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, BURST_DELAY_MS));
+        await new Promise((resolve) => setTimeout(resolve, BURST_DELAY_MS));
       }
     }
 
     // All events sent — wait for everything to finish processing, then go self-managing
     await waitForAllEventsDone(setState);
-    setState(prev => ({ ...prev, demoPhase: 'self-managing' }));
+    setState((prev) => ({ ...prev, demoPhase: "self-managing" }));
   }, []);
 
   const resetDemo = useCallback(async () => {
     const serverUrl = getServerUrl();
     try {
-      await fetch(`${serverUrl}/api/reset`, { method: 'POST' });
+      await fetch(`${serverUrl}/api/reset`, { method: "POST" });
     } catch (err) {
-      console.error('Failed to reset:', err);
+      console.error("Failed to reset:", err);
     }
     setState(createInitialState());
   }, []);
@@ -782,35 +852,36 @@ export function useSSE(): DashboardState & {
     const serverUrl = getServerUrl();
     try {
       // Toggle between Anthropic and Cerebras
-      const nextConfig = state.providerConfig.provider === 'anthropic'
-        ? { provider: 'cerebras', model: 'gpt-oss-120b' }
-        : { provider: 'anthropic', model: 'claude-opus-4-6' };
+      const nextConfig =
+        state.providerConfig.provider === "anthropic"
+          ? { provider: "cerebras", model: "gpt-oss-120b" }
+          : { provider: "anthropic", model: "claude-opus-4-6" };
 
       const resp = await fetch(`${serverUrl}/api/provider`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(nextConfig),
       });
       if (resp.ok) {
         const data = await resp.json();
         const providerConfig = { provider: data.provider, model: data.model };
-        localStorage.setItem('providerConfig', JSON.stringify(providerConfig));
-        setState(prev => ({
+        localStorage.setItem("providerConfig", JSON.stringify(providerConfig));
+        setState((prev) => ({
           ...prev,
           providerConfig,
         }));
       }
     } catch (err) {
-      console.error('Failed to switch provider:', err);
+      console.error("Failed to switch provider:", err);
     }
   }, [state.providerConfig.provider]);
 
   const selectEvent = useCallback((index: number) => {
-    setState(prev => ({ ...prev, activeEventIndex: index }));
+    setState((prev) => ({ ...prev, activeEventIndex: index }));
   }, []);
 
   const clearError = useCallback(() => {
-    setState(prev => ({ ...prev, error: null }));
+    setState((prev) => ({ ...prev, error: null }));
   }, []);
 
   return {
@@ -827,13 +898,15 @@ export function useSSE(): DashboardState & {
 // With concurrent lanes, isProcessing can toggle rapidly, so instead
 // we check that every known event has reached 'done' status.
 function waitForAllEventsDone(
-  setState: React.Dispatch<React.SetStateAction<DashboardState>>
+  setState: React.Dispatch<React.SetStateAction<DashboardState>>,
 ): Promise<void> {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     const totalExpected = DEMO_EVENTS.length;
     const check = () => {
-      setState(prev => {
-        const doneCount = prev.events.filter(ev => ev.status === 'done').length;
+      setState((prev) => {
+        const doneCount = prev.events.filter(
+          (ev) => ev.status === "done",
+        ).length;
         if (doneCount >= totalExpected) {
           setTimeout(resolve, 500);
           return prev;

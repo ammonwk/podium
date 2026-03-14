@@ -5,6 +5,26 @@ import { emitChatSSE } from '../shared/chat-sse.js';
 import { executeSendSms } from './send-sms.js';
 import { getOwnerSettings } from '../shared/owner-settings.js';
 
+function getMountainTime(): { day: number; hour: number } {
+  const now = new Date();
+  const mt = new Date(now.toLocaleString('en-US', { timeZone: 'America/Denver' }));
+  return { day: mt.getDay(), hour: mt.getHours() };
+}
+
+async function findScheduledVendor(category: string) {
+  const { day, hour } = getMountainTime();
+
+  const vendors = await VendorModel.find({
+    specialty: category,
+    status: { $in: ['available', 'on_call'] },
+    schedule: { $elemMatch: { day, start_hour: { $lte: hour }, end_hour: { $gt: hour } } },
+  })
+    .sort({ rating: -1 })
+    .lean();
+
+  return vendors[0] ?? null;
+}
+
 const SEVERITY_HOURS: Record<string, number> = {
   low: 1.5,
   medium: 2,
@@ -43,6 +63,16 @@ export async function executeReportMaintenanceIssue(
     `[TOOL:report_maintenance_issue] Created pending ${workOrderId} at ${property.name} (${category}/${severity})`,
   );
 
+  // Auto-escalate high/emergency severity to owner
+  if (severity === 'high' || severity === 'emergency') {
+    const owner = await getOwnerSettings();
+    await executeSendSms({
+      to: owner.phone,
+      body: `\u{1F6A8} ${severity.toUpperCase()} maintenance at ${property.name}: ${issue_description}. Work order ${workOrderId} created.`,
+    });
+    console.log(`[report_maintenance_issue] Auto-escalated ${severity} issue to owner`);
+  }
+
   // Kick off background vendor matching
   if (sessionId) {
     matchAndDispatchVendor(workOrderId, category, property_id, sessionId).catch((err) => {
@@ -74,13 +104,8 @@ async function matchAndDispatchVendor(
   const workOrder = await WorkOrderModel.findOne({ id: workOrderId }).lean();
   if (!workOrder) return;
 
-  // Find best available vendor by specialty
-  const vendor = await VendorModel.findOne({
-    specialty: category,
-    status: { $in: ['available', 'on_call'] },
-  })
-    .sort({ rating: -1 })
-    .lean();
+  // Find best available vendor whose schedule covers the current time
+  const vendor = await findScheduledVendor(category);
 
   const owner = await getOwnerSettings();
 
@@ -138,6 +163,12 @@ async function matchAndDispatchVendor(
   console.log(
     `[report_maintenance_issue] Dispatched ${vendor.name} to ${property.name} ($${estimatedCost})`,
   );
+
+  // Notify owner of the dispatch
+  await executeSendSms({
+    to: owner.phone,
+    body: `Dispatched ${vendor.name} to ${property.name} for ${category}: ${workOrder.issue_description}. Est cost $${estimatedCost} (${workOrder.severity}). WO ${workOrderId}.`,
+  });
 
   emitChatSSE(sessionId, 'chat_text', {
     text: `\n\nGreat news — I've dispatched ${vendor.name} to ${property.name}. They should be there shortly!`,

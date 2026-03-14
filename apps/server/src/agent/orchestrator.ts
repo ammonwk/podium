@@ -23,6 +23,13 @@ export async function runLoop(
 
   context.emitter.onStart(context.eventName, context.label);
 
+  // Deduplication for mutating (write) tool calls across iterations
+  const MUTATING_TOOLS = new Set([
+    'create_booking', 'edit_booking', 'create_work_order',
+    'send_sms', 'adjust_price', 'report_maintenance_issue',
+  ]);
+  const executedMutatingCalls = new Set<string>();
+
   let iteration = 0;
 
   while (iteration < context.maxIterations) {
@@ -121,6 +128,23 @@ export async function runLoop(
       console.log(`[${context.label}] Executing tool: ${tc.name}`);
       let result: Record<string, unknown>;
       let isError = false;
+
+      // Guard: deduplicate mutating tool calls across iterations
+      if (MUTATING_TOOLS.has(tc.name)) {
+        const dedupKey = `${tc.name}::${JSON.stringify(tc.input)}`;
+        if (executedMutatingCalls.has(dedupKey)) {
+          console.warn(`[${context.label}] Skipping duplicate mutating call: ${tc.name}`);
+          context.emitter.onToolCall(tc.name, tc.input, { error: 'This action was already performed.' }, true);
+          toolResultBlocks.push({
+            type: 'tool_result',
+            tool_use_id: tc.id,
+            content: JSON.stringify({ error: 'This action was already performed.' }),
+            is_error: true,
+          });
+          continue;
+        }
+        executedMutatingCalls.add(dedupKey);
+      }
 
       // Guard: reject tools not in the allowed set
       if (!allowedToolNames.has(tc.name)) {

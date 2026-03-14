@@ -52,6 +52,12 @@ export interface ScheduleEvent {
   notes?: string;
 }
 
+export interface VendorAvailabilityWindow {
+  day: number;        // 0=Sun, 1=Mon, ..., 6=Sat (JS Date.getDay())
+  start_hour: number; // 0-23 inclusive
+  end_hour: number;   // 0-23 exclusive (17 = available until 5:00 PM)
+}
+
 export interface Vendor {
   id: string;
   name: string;
@@ -59,6 +65,7 @@ export interface Vendor {
   rating: number;
   hourly_rate: number;
   status: 'available' | 'busy' | 'on_call';
+  schedule: VendorAvailabilityWindow[];
 }
 
 export interface WorkOrder {
@@ -169,6 +176,19 @@ export interface QueryDatabaseInput {
   pipeline?: Record<string, unknown>[];
   sort?: Record<string, unknown>;
   limit?: number;
+}
+
+export interface EscalateToOwnerInput {
+  summary: string;
+  severity: 'high' | 'emergency';
+  property_id?: string;
+}
+
+export interface EscalateToOwnerResult {
+  status: string;
+  owner_name: string;
+  timestamp: string;
+  summary_sent: string;
 }
 
 export interface ReportMaintenanceIssueInput {

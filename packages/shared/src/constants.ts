@@ -12,9 +12,13 @@ export const VENDOR_IDS = {
   MIKES_PLUMBING: 'VENDOR_001',
   JOES_PLUMBING: 'VENDOR_002',
   BRIGHT_ELECTRICAL: 'VENDOR_003',
-  SPOTLESS_CLEANING: 'VENDOR_004',
-  ALLFIX_MAINTENANCE: 'VENDOR_005',
-  PEAK_HVAC: 'VENDOR_006',
+  SPARKS_ELECTRIC: 'VENDOR_004',
+  SPOTLESS_CLEANING: 'VENDOR_005',
+  FRESH_START_CLEANING: 'VENDOR_006',
+  ALLFIX_MAINTENANCE: 'VENDOR_007',
+  HANDY_PROS: 'VENDOR_008',
+  PEAK_HVAC: 'VENDOR_009',
+  SUMMIT_HVAC: 'VENDOR_010',
 } as const;
 
 // ─── Phone Numbers ───────────────────────────────────────────────────────────
@@ -56,6 +60,7 @@ export const TOOL_NAMES = {
   LOOKUP_GUEST: 'lookup_guest',
   QUERY_DATABASE: 'query_database',
   REPORT_MAINTENANCE_ISSUE: 'report_maintenance_issue',
+  ESCALATE_TO_OWNER: 'escalate_to_owner',
 } as const;
 
 // ─── SSE Event Names ─────────────────────────────────────────────────────────
@@ -84,7 +89,7 @@ export const PROVIDERS = {
   },
 };
 
-export const DEFAULT_PROVIDER = PROVIDERS.CEREBRAS;
+export const DEFAULT_PROVIDER = PROVIDERS.ANTHROPIC;
 
 // ─── Tool Card Colors (for dashboard) ────────────────────────────────────────
 
@@ -102,6 +107,7 @@ export const TOOL_COLORS: Record<string, string> = {
   lookup_guest: '#8B5CF6',
   query_database: '#6366F1',
   report_maintenance_issue: '#F59E0B',
+  escalate_to_owner: '#DC2626',
 };
 
 // ─── Dashboard Theme ─────────────────────────────────────────────────────────

@@ -43,6 +43,9 @@ import { BookingModel, PropertyModel, ScheduleEventModel } from './shared/db.js'
 // ─── Express App ──────────────────────────────────────────────────────────────
 
 const app = express();
+
+// Per-session mutex to prevent concurrent runLoop executions from clobbering history
+const sessionLocks = new Map<string, Promise<void>>();
 app.use(cors());
 app.use(express.json());
 
@@ -388,6 +391,21 @@ app.post('/chat', async (req, res) => {
     session.phone_number = phoneNumber;
   }
 
+  // Wait for any in-flight runLoop on this session to finish before mutating
+  const pendingLock = sessionLocks.get(sessionId);
+  if (pendingLock) {
+    await pendingLock;
+  }
+
+  // Re-load session after awaiting lock to get the latest persisted state
+  if (pendingLock) {
+    session = await ChatSessionModel.findOne({ session_id: sessionId });
+    if (!session) {
+      res.status(404).json({ error: 'Session lost' });
+      return;
+    }
+  }
+
   // Persist user message
   const userMsg = {
     id: `msg_${Date.now()}`,
@@ -400,6 +418,8 @@ app.post('/chat', async (req, res) => {
   // Wrap user message in untrusted-input tags (same defense as SMS path)
   session.history.push({ role: 'user', content: wrapUntrustedInput(message) });
   session.updated_at = now;
+  session.markModified('history');
+  session.markModified('messages');
   await session.save();
 
   // Run unified loop in background (streaming via SSE)
@@ -415,40 +435,51 @@ app.post('/chat', async (req, res) => {
   // Use a mutable reference to the history array so runLoop can push to it
   const history = session.history as import('@apm/shared').LLMMessage[];
 
-  runLoop(history, {
-    label: `CHAT:${sessionId}`,
-    eventName: `chat-${sessionId}`,
-    maxIterations: AGENT_CONFIG.CHAT_MAX_ITERATIONS,
-    tools,
-    systemPrompt: buildSystemPrompt(role, normalizedPhone || session.phone_number),
-    emitter: createChatEmitter(sessionId),
-    sessionId,
-  }).then(async () => {
-    // After loop completes, persist updated history and add assistant message
-    const assistantBlocks = history.filter(m => m.role === 'assistant');
-    const lastAssistant = assistantBlocks[assistantBlocks.length - 1];
-    if (lastAssistant) {
-      const text = typeof lastAssistant.content === 'string'
-        ? lastAssistant.content
-        : (lastAssistant.content as any[])
-            .filter((b: any) => b.type === 'text')
-            .map((b: any) => b.text)
-            .join('');
-      if (text) {
-        session!.messages.push({
-          id: `msg_${Date.now()}`,
-          role: 'assistant',
-          content: text,
-          timestamp: new Date().toISOString(),
-        });
+  // Run loop with per-session lock to prevent concurrent mutations
+  const loopPromise = (async () => {
+    try {
+      await runLoop(history, {
+        label: `CHAT:${sessionId}`,
+        eventName: `chat-${sessionId}`,
+        maxIterations: AGENT_CONFIG.CHAT_MAX_ITERATIONS,
+        tools,
+        systemPrompt: buildSystemPrompt(role, normalizedPhone || session!.phone_number),
+        emitter: createChatEmitter(sessionId),
+        sessionId,
+      });
+
+      // After loop completes, persist updated history and add assistant message
+      const assistantBlocks = history.filter(m => m.role === 'assistant');
+      const lastAssistant = assistantBlocks[assistantBlocks.length - 1];
+      if (lastAssistant) {
+        const text = typeof lastAssistant.content === 'string'
+          ? lastAssistant.content
+          : (lastAssistant.content as any[])
+              .filter((b: any) => b.type === 'text')
+              .map((b: any) => b.text)
+              .join('');
+        if (text) {
+          session!.messages.push({
+            id: `msg_${Date.now()}`,
+            role: 'assistant',
+            content: text,
+            timestamp: new Date().toISOString(),
+          });
+        }
       }
+      session!.history = history;
+      session!.updated_at = new Date().toISOString();
+      session!.markModified('history');
+      session!.markModified('messages');
+      await session!.save();
+    } catch (err) {
+      console.error('[CHAT] Error:', err);
+    } finally {
+      sessionLocks.delete(sessionId);
     }
-    session!.history = history;
-    session!.updated_at = new Date().toISOString();
-    await session!.save();
-  }).catch((err) => {
-    console.error('[CHAT] Error:', err);
-  });
+  })();
+
+  sessionLocks.set(sessionId, loopPromise);
 
   res.json({ status: 'ok' });
 });
