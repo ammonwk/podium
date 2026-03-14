@@ -37,60 +37,78 @@ export async function runLoop(
     iteration++;
     console.log(`[${context.label}] Iteration ${iteration}/${context.maxIterations}`);
 
-    const assistantBlocks: LLMContentBlock[] = [];
-    const pendingToolCalls: ToolCall[] = [];
+    let assistantBlocks: LLMContentBlock[] = [];
+    let pendingToolCalls: ToolCall[] = [];
     let fullText = '';
 
-    try {
-      const stream = client.stream(context.systemPrompt, conversationHistory, context.tools);
+    const MAX_STREAM_RETRIES = 2;
+    let streamSuccess = false;
 
-      for await (const event of stream) {
-        switch (event.type) {
-          case 'thinking_delta': {
-            const thinkingText = event.text || '';
-            context.emitter.onThinkingDelta(thinkingText);
-            break;
-          }
-          case 'thinking_done': {
-            if (event.thinking_block) {
-              assistantBlocks.push({
-                type: 'thinking',
-                thinking: event.thinking_block.thinking,
-                signature: event.thinking_block.signature,
-              });
+    for (let attempt = 0; attempt <= MAX_STREAM_RETRIES; attempt++) {
+      if (attempt > 0) {
+        console.log(`[${context.label}] Retrying stream (attempt ${attempt + 1}/${MAX_STREAM_RETRIES + 1})`);
+        assistantBlocks = [];
+        pendingToolCalls = [];
+        fullText = '';
+        await new Promise((r) => setTimeout(r, 1000 * attempt));
+      }
+
+      try {
+        const stream = client.stream(context.systemPrompt, conversationHistory, context.tools);
+
+        for await (const event of stream) {
+          switch (event.type) {
+            case 'thinking_delta': {
+              const thinkingText = event.text || '';
+              context.emitter.onThinkingDelta(thinkingText);
+              break;
             }
-            break;
-          }
-          case 'text': {
-            const text = event.text || '';
-            fullText += text;
-            context.emitter.onTextDelta(text);
-            break;
-          }
-          case 'tool_use_start': {
-            break;
-          }
-          case 'tool_use_done': {
-            if (event.tool_call) {
-              pendingToolCalls.push({
-                id: event.tool_call.id,
-                name: event.tool_call.name,
-                input: event.tool_call.input,
-              });
+            case 'thinking_done': {
+              if (event.thinking_block) {
+                assistantBlocks.push({
+                  type: 'thinking',
+                  thinking: event.thinking_block.thinking,
+                  signature: event.thinking_block.signature,
+                });
+              }
+              break;
             }
-            break;
-          }
-          case 'done': {
-            break;
+            case 'text': {
+              const text = event.text || '';
+              fullText += text;
+              context.emitter.onTextDelta(text);
+              break;
+            }
+            case 'tool_use_start': {
+              break;
+            }
+            case 'tool_use_done': {
+              if (event.tool_call) {
+                pendingToolCalls.push({
+                  id: event.tool_call.id,
+                  name: event.tool_call.name,
+                  input: event.tool_call.input,
+                });
+              }
+              break;
+            }
+            case 'done': {
+              break;
+            }
           }
         }
+        streamSuccess = true;
+        break; // stream completed successfully
+      } catch (err: any) {
+        console.error(`[${context.label}] LLM stream error (attempt ${attempt + 1}):`, err);
+        if (attempt === MAX_STREAM_RETRIES) {
+          context.emitter.onError(`LLM error: ${err.message || 'Unknown error'}`);
+        }
       }
-    } catch (err: any) {
-      console.error(`[${context.label}] LLM stream error:`, err);
-      context.emitter.onError(`LLM error: ${err.message || 'Unknown error'}`);
-      // Don't push partial assistant message to history — it may contain
-      // tool_use blocks without matching tool_results, which corrupts the
-      // conversation for all future LLM calls in this lane.
+    }
+
+    if (!streamSuccess) {
+      // All retries exhausted — don't push partial message to history
       break;
     }
 

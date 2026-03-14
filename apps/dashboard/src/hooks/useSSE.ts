@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { DEMO_EVENTS, SSE_EVENTS, PROPERTY_IDS } from "@apm/shared";
 import type {
   ThinkingPayload,
+  AssistantTextPayload,
   ToolCallPayload,
   EventStartPayload,
   EventDonePayload,
@@ -23,6 +24,7 @@ export interface EventState {
   source: "human" | "system" | "self-scheduled";
   status: "queued" | "active" | "done";
   thinkingText: string;
+  assistantText: string;
   toolCalls: ToolCallData[];
   startedAt?: string;
   completedAt?: string;
@@ -264,6 +266,7 @@ function applySSEEvent(
         source: p.source,
         status: "queued",
         thinkingText: "",
+        assistantText: "",
         toolCalls: [],
         conversationId: p.conversation_id,
         conversationType: p.conversation_type,
@@ -291,6 +294,7 @@ function applySSEEvent(
         source: p.source,
         status: "active",
         thinkingText: "",
+        assistantText: "",
         toolCalls: [],
         startedAt: (payload.timestamp as string) || new Date().toISOString(),
         triggerMessage: trigger,
@@ -366,6 +370,16 @@ function applySSEEvent(
       const newEvents = prev.events.map((ev) =>
         ev.name === p.event_name && ev.status === "active"
           ? { ...ev, thinkingText: ev.thinkingText + p.text }
+          : ev,
+      );
+      return { ...prev, events: newEvents };
+    }
+
+    case SSE_EVENTS.ASSISTANT_TEXT: {
+      const p = payload as unknown as AssistantTextPayload;
+      const newEvents = prev.events.map((ev) =>
+        ev.name === p.event_name && ev.status === "active"
+          ? { ...ev, assistantText: ev.assistantText + p.text }
           : ev,
       );
       return { ...prev, events: newEvents };
@@ -668,6 +682,7 @@ export function useSSE(): DashboardState & {
   const [state, setState] = useState<DashboardState>(createInitialState);
   const eventSourceRef = useRef<EventSource | null>(null);
   const retryTimerRef = useRef<number | null>(null);
+  const retryCountRef = useRef(0);
   const activityCounterRef = useRef(0);
   const pendingTriggersRef = useRef<Map<string, TriggerMessage>>(new Map());
 
@@ -764,17 +779,19 @@ export function useSSE(): DashboardState & {
     eventSourceRef.current = es;
 
     es.onopen = () => {
+      retryCountRef.current = 0;
       setState((prev) => ({ ...prev, error: null }));
     };
 
     es.onerror = () => {
       es.close();
       eventSourceRef.current = null;
-      // Retry after 2 seconds
+      const delay = Math.min(2000 * Math.pow(2, retryCountRef.current), 30000);
+      retryCountRef.current++;
       if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
       retryTimerRef.current = window.setTimeout(() => {
         connect();
-      }, 2000);
+      }, delay);
     };
 
     // Create a shared context for live events that uses the refs
@@ -789,6 +806,7 @@ export function useSSE(): DashboardState & {
       SSE_EVENTS.EVENT_DONE,
       SSE_EVENTS.EVENT_QUEUED,
       SSE_EVENTS.THINKING,
+      SSE_EVENTS.ASSISTANT_TEXT,
       SSE_EVENTS.TOOL_CALL,
       SSE_EVENTS.SCHEDULED_TASK,
       SSE_EVENTS.ISSUE_RESOLVED,

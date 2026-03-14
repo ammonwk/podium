@@ -115,10 +115,13 @@ export const ChatWidget: React.FC = () => {
     } catch { return crypto.randomUUID(); }
   });
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
+  const [chatError, setChatError] = useState<string | null>(null);
+  const [reconnectKey, setReconnectKey] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const streamingTextRef = useRef('');
+  const activityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -153,18 +156,44 @@ export const ChatWidget: React.FC = () => {
     }
   }, [isOpen]);
 
+  // Activity timer: resets on every SSE event, fires after 30s of inactivity
+  const resetActivityTimer = useCallback(() => {
+    if (activityTimerRef.current) clearTimeout(activityTimerRef.current);
+    activityTimerRef.current = setTimeout(() => {
+      setIsStreaming(false);
+      setChatError('Response timed out. Please try again.');
+    }, 30000);
+  }, []);
+
+  const clearActivityTimer = useCallback(() => {
+    if (activityTimerRef.current) {
+      clearTimeout(activityTimerRef.current);
+      activityTimerRef.current = null;
+    }
+  }, []);
+
   // SSE connection management
   useEffect(() => {
     if (!isOpen) {
       eventSourceRef.current?.close();
       eventSourceRef.current = null;
+      clearActivityTimer();
       return;
     }
 
     const es = new EventSource(`/chat/stream?sessionId=${sessionId}`);
     eventSourceRef.current = es;
 
+    es.onerror = () => {
+      es.close();
+      eventSourceRef.current = null;
+      clearActivityTimer();
+      // Reconnect by bumping the key
+      setTimeout(() => setReconnectKey((k) => k + 1), 2000);
+    };
+
     es.addEventListener('chat_text', (e) => {
+      resetActivityTimer();
       const { text } = JSON.parse(e.data);
       streamingTextRef.current += text;
       const currentText = streamingTextRef.current;
@@ -183,6 +212,7 @@ export const ChatWidget: React.FC = () => {
     });
 
     es.addEventListener('chat_tool_call', (e) => {
+      resetActivityTimer();
       const data: ToolCallData = JSON.parse(e.data);
 
       // Insert tool call bubble before the current streaming assistant message
@@ -211,7 +241,16 @@ export const ChatWidget: React.FC = () => {
       streamingTextRef.current = '';
     });
 
+    es.addEventListener('chat_error', (e) => {
+      clearActivityTimer();
+      const { message } = JSON.parse(e.data);
+      setChatError(message || 'Something went wrong. Please try again.');
+      setIsStreaming(false);
+      streamingTextRef.current = '';
+    });
+
     es.addEventListener('chat_done', () => {
+      clearActivityTimer();
       setIsStreaming(false);
       streamingTextRef.current = '';
       setMessages((prev) => {
@@ -235,8 +274,9 @@ export const ChatWidget: React.FC = () => {
     return () => {
       es.close();
       eventSourceRef.current = null;
+      clearActivityTimer();
     };
-  }, [isOpen, sessionId]);
+  }, [isOpen, sessionId, reconnectKey, resetActivityTimer, clearActivityTimer]);
 
   const isStreamingMsg = (msg: DisplayMessage) => msg.id.startsWith('streaming-');
 
@@ -251,27 +291,54 @@ export const ChatWidget: React.FC = () => {
       timestamp: new Date().toISOString(),
     };
 
+    const streamingId = `streaming-${crypto.randomUUID()}`;
+
     setMessages((prev) => [
       ...prev,
       userMsg,
-      { id: `streaming-${crypto.randomUUID()}`, role: 'assistant', content: '', timestamp: new Date().toISOString() },
+      { id: streamingId, role: 'assistant', content: '', timestamp: new Date().toISOString() },
     ]);
     setInputText('');
     if (inputRef.current) inputRef.current.style.height = 'auto';
     setIsStreaming(true);
+    setChatError(null);
     streamingTextRef.current = '';
+    resetActivityTimer();
 
-    try {
-      await fetch('/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, role, sessionId }),
-      });
-    } catch (err) {
-      console.error('[ChatWidget] Send error:', err);
-      setIsStreaming(false);
+    // Retry POST up to 2 times with exponential backoff
+    const maxRetries = 2;
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const resp = await fetch('/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: text, role, sessionId }),
+        });
+        if (resp.ok) return; // success
+        // Don't retry on 4xx client errors
+        if (resp.status >= 400 && resp.status < 500) {
+          throw new Error(`Client error: ${resp.status}`);
+        }
+        lastError = new Error(`Server error: ${resp.status}`);
+      } catch (err) {
+        lastError = err;
+        // Don't retry client errors
+        if (err instanceof Error && err.message.startsWith('Client error:')) break;
+      }
+      if (attempt < maxRetries) {
+        await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt)));
+      }
     }
-  }, [inputText, isStreaming, role, sessionId]);
+
+    // All retries failed
+    console.error('[ChatWidget] Send error after retries:', lastError);
+    clearActivityTimer();
+    setIsStreaming(false);
+    setChatError('Failed to send message. Please try again.');
+    // Remove the empty streaming placeholder
+    setMessages((prev) => prev.filter((m) => m.id !== streamingId));
+  }, [inputText, isStreaming, role, sessionId, resetActivityTimer, clearActivityTimer]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -447,6 +514,14 @@ export const ChatWidget: React.FC = () => {
             {messages.map(renderMessage)}
             <div ref={messagesEndRef} />
           </div>
+
+          {/* Error banner */}
+          {chatError && (
+            <div style={styles.errorBanner}>
+              <span style={{ flex: 1 }}>{chatError}</span>
+              <button style={styles.errorDismiss} onClick={() => setChatError(null)}>&times;</button>
+            </div>
+          )}
 
           {/* Input */}
           <div style={styles.inputArea}>
@@ -675,6 +750,27 @@ const styles: Record<string, React.CSSProperties> = {
     maxHeight: '150px',
     overflowY: 'auto' as const,
     color: THEME.text.primary,
+  },
+  errorBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '8px 16px',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderTop: '1px solid rgba(239, 68, 68, 0.3)',
+    color: '#ef4444',
+    fontSize: '13px',
+    fontFamily: THEME.font.sans,
+    flexShrink: 0,
+  },
+  errorDismiss: {
+    background: 'none',
+    border: 'none',
+    color: '#ef4444',
+    fontSize: '18px',
+    cursor: 'pointer',
+    padding: '0 4px',
+    lineHeight: 1,
   },
   inputArea: {
     display: 'flex',
