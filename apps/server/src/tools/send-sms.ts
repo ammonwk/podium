@@ -34,7 +34,8 @@ async function resolveRecipient(
     }
   }
 
-  return null;
+  // Allow any phone number for live demo — judges/visitors can text in and get replies
+  return { name: `Unknown (${phone})`, type: 'guest' };
 }
 
 export async function executeSendSms(
