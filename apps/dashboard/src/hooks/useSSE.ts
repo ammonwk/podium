@@ -17,6 +17,12 @@ import type {
 
 // ─── State Types ────────────────────────────────────────────────────────────
 
+export interface TriggerMessage {
+  from: string;
+  body: string;
+  name: string;
+}
+
 export interface EventState {
   name: string;
   source: 'human' | 'system' | 'self-scheduled';
@@ -25,6 +31,7 @@ export interface EventState {
   toolCalls: ToolCallData[];
   startedAt?: string;
   completedAt?: string;
+  triggerMessage?: TriggerMessage;
 }
 
 export interface ToolCallData {
@@ -172,6 +179,7 @@ export function useSSE(): DashboardState & {
   const eventSourceRef = useRef<EventSource | null>(null);
   const retryTimerRef = useRef<number | null>(null);
   const activityCounterRef = useRef(0);
+  const pendingTriggersRef = useRef<Map<string, TriggerMessage>>(new Map());
 
   // ─── SSE Connection ──────────────────────────────────────────────────────
 
@@ -202,6 +210,12 @@ export function useSSE(): DashboardState & {
     es.addEventListener(SSE_EVENTS.EVENT_START, (e: MessageEvent) => {
       const payload: EventStartPayload = JSON.parse(e.data);
       setState(prev => {
+        // Attach trigger message if we stored one for this event
+        const trigger = pendingTriggersRef.current.get(payload.event_name);
+        if (trigger) {
+          pendingTriggersRef.current.delete(payload.event_name);
+        }
+
         const newEvent: EventState = {
           name: payload.event_name,
           source: payload.source,
@@ -209,6 +223,7 @@ export function useSSE(): DashboardState & {
           thinkingText: '',
           toolCalls: [],
           startedAt: new Date().toISOString(),
+          triggerMessage: trigger,
         };
         // Check if this event was already queued
         const existingIdx = prev.events.findIndex(
@@ -218,7 +233,7 @@ export function useSSE(): DashboardState & {
         let newIndex: number;
         if (existingIdx >= 0) {
           newEvents = prev.events.map((ev, i) =>
-            i === existingIdx ? { ...ev, status: 'active' as const, startedAt: new Date().toISOString() } : ev
+            i === existingIdx ? { ...ev, status: 'active' as const, startedAt: new Date().toISOString(), triggerMessage: trigger || ev.triggerMessage } : ev
           );
           newIndex = existingIdx;
         } else {
@@ -228,7 +243,7 @@ export function useSSE(): DashboardState & {
 
         // Mark upcoming tasks as fired if this matches
         const newTasks = prev.upcomingTasks.map(t =>
-          payload.event_name.includes(t.description.substring(0, 20)) ||
+          (t.description && payload.event_name.includes(t.description.substring(0, 20))) ||
           payload.source === 'self-scheduled'
             ? { ...t, status: 'fired' as const }
             : t
@@ -490,8 +505,15 @@ export function useSSE(): DashboardState & {
     for (let i = 0; i < DEMO_EVENTS.length; i++) {
       setState(prev => ({ ...prev, demoEventIndex: i }));
 
-      // Add inbound SMS activity for guest_message events
+      // Add inbound SMS activity + store trigger for event card
       if (DEMO_EVENTS[i].type === 'guest_message' && DEMO_EVENTS[i].body) {
+        const triggerMsg: TriggerMessage = {
+          from: DEMO_EVENTS[i].from || '',
+          body: DEMO_EVENTS[i].body || '',
+          name: DEMO_EVENTS[i].name,
+        };
+        pendingTriggersRef.current.set(DEMO_EVENTS[i].name, triggerMsg);
+
         const actId = `act_inbound_${++activityCounterRef.current}`;
         setState(prev => ({
           ...prev,
@@ -510,6 +532,14 @@ export function useSSE(): DashboardState & {
             ...prev.activities,
           ],
         }));
+      } else if (DEMO_EVENTS[i].type === 'market_alert') {
+        // Store market alert as trigger message too
+        const triggerMsg: TriggerMessage = {
+          from: 'Market Alert',
+          body: (DEMO_EVENTS[i] as { message?: string }).message || '',
+          name: DEMO_EVENTS[i].name,
+        };
+        pendingTriggersRef.current.set(DEMO_EVENTS[i].name, triggerMsg);
       }
 
       try {
