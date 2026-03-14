@@ -216,7 +216,7 @@ function createInitialState(): DashboardState {
         const saved = localStorage.getItem("providerConfig");
         if (saved) return JSON.parse(saved);
       } catch {}
-      return { provider: "anthropic", model: "claude-opus-4-6" };
+      return { provider: "cerebras", model: "gpt-oss-120b" };
     })(),
     demoEventIndex: 0,
   };

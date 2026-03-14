@@ -91,7 +91,7 @@ export const PROVIDERS = {
   },
 };
 
-export const DEFAULT_PROVIDER = PROVIDERS.ANTHROPIC;
+export const DEFAULT_PROVIDER = PROVIDERS.CEREBRAS;
 
 // ─── Tool Card Colors (for dashboard) ────────────────────────────────────────
 
