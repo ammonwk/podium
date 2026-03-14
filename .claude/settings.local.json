@@ -3,7 +3,8 @@
     "allow": [
       "WebFetch(domain:docs.surge.app)",
       "Bash(curl:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(git merge:*)"
     ]
   }
 }
