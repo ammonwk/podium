@@ -35,7 +35,7 @@ import { laneManager, DEMO_LANE_ID } from './shared/lane-manager.js';
 import type { ConversationType } from './shared/lane-manager.js';
 import { getOwnerSettings, setOwnerSettings, loadOwnerSettings, initOwnerSettings } from './shared/owner-settings.js';
 import { buildSystemPrompt } from './agent/system-prompt.js';
-import { ALL_TOOLS, CHAT_BOOKING_TOOLS, NO_TOOLS } from './tools/definitions.js';
+import { ALL_TOOLS, CHAT_BOOKING_TOOLS, CHAT_OWNER_TOOLS, NO_TOOLS } from './tools/definitions.js';
 import { normalizePhone } from './shared/phone-utils.js';
 import { executeCreateBooking } from './tools/create-booking.js';
 import { BookingModel, PropertyModel, ScheduleEventModel } from './shared/db.js';
@@ -399,7 +399,11 @@ app.post('/chat', async (req, res) => {
 
   // Run unified loop in background (streaming via SSE)
   const normalizedPhone = session.phone_number ? normalizePhone(session.phone_number) : undefined;
-  const tools = role === 'interested_person' ? CHAT_BOOKING_TOOLS : NO_TOOLS;
+  const tools = role === 'interested_person'
+    ? CHAT_BOOKING_TOOLS
+    : role === 'property_owner'
+      ? CHAT_OWNER_TOOLS
+      : NO_TOOLS;
 
   // Use a mutable reference to the history array so runLoop can push to it
   const history = session.history as import('@apm/shared').LLMMessage[];

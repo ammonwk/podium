@@ -10,6 +10,7 @@ import { executeCreateBooking } from './create-booking.js';
 import { executeEditBooking } from './edit-booking.js';
 import { executeGetPropertyStatus } from './get-property-status.js';
 import { executeLookupGuest } from './lookup-guest.js';
+import { executeQueryDatabase } from './query-database.js';
 
 type ToolExecutor = (input: Record<string, unknown>) => Promise<Record<string, unknown>>;
 
@@ -36,6 +37,8 @@ const registry: Record<string, ToolExecutor> = {
     executeGetPropertyStatus(input as any) as unknown as Promise<Record<string, unknown>>,
   [TOOL_NAMES.LOOKUP_GUEST]: (input) =>
     executeLookupGuest(input as any) as unknown as Promise<Record<string, unknown>>,
+  [TOOL_NAMES.QUERY_DATABASE]: (input) =>
+    executeQueryDatabase(input as any) as unknown as Promise<Record<string, unknown>>,
 };
 
 export async function executeTool(

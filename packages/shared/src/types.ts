@@ -162,6 +162,22 @@ export interface EditBookingInput {
   new_property_id?: string;
 }
 
+export interface QueryDatabaseInput {
+  collection: 'bookings' | 'properties' | 'workorders' | 'scheduleevents' | 'decisions' | 'vendors' | 'scheduledtasks';
+  operation: 'find' | 'aggregate';
+  filter?: Record<string, unknown>;
+  pipeline?: Record<string, unknown>[];
+  sort?: Record<string, unknown>;
+  limit?: number;
+}
+
+export interface QueryDatabaseResult {
+  collection: string;
+  operation: string;
+  count: number;
+  results: Record<string, unknown>[];
+}
+
 // ─── Tool Results ────────────────────────────────────────────────────────────
 
 export interface SendSmsResult {
