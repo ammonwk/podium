@@ -38,6 +38,8 @@ export const TOOL_NAMES = {
   GET_MARKET_DATA: 'get_market_data',
   UPDATE_SCHEDULE: 'update_schedule',
   SCHEDULE_TASK: 'schedule_task',
+  CREATE_BOOKING: 'create_booking',
+  EDIT_BOOKING: 'edit_booking',
 } as const;
 
 // ─── SSE Event Names ─────────────────────────────────────────────────────────
@@ -78,6 +80,8 @@ export const TOOL_COLORS: Record<string, string> = {
   get_market_data: '#059669',
   update_schedule: '#7C3AED',
   schedule_task: '#0D9488',
+  create_booking: '#2563EB',
+  edit_booking: '#7C3AED',
 };
 
 // ─── Dashboard Theme ─────────────────────────────────────────────────────────

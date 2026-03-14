@@ -11,6 +11,8 @@ import { executeLogDecision } from '../tools/log-decision.js';
 import { executeGetMarketData } from '../tools/get-market-data.js';
 import { executeUpdateSchedule } from '../tools/update-schedule.js';
 import { executeScheduleTask } from '../tools/schedule-task.js';
+import { executeCreateBooking } from '../tools/create-booking.js';
+import { executeEditBooking } from '../tools/edit-booking.js';
 
 interface ToolCall {
   id: string;
@@ -52,6 +54,16 @@ async function executeTool(
       >;
     case TOOL_NAMES.SCHEDULE_TASK:
       return (await executeScheduleTask(input as any)) as unknown as Record<
+        string,
+        unknown
+      >;
+    case TOOL_NAMES.CREATE_BOOKING:
+      return (await executeCreateBooking(input as any)) as unknown as Record<
+        string,
+        unknown
+      >;
+    case TOOL_NAMES.EDIT_BOOKING:
+      return (await executeEditBooking(input as any)) as unknown as Record<
         string,
         unknown
       >;

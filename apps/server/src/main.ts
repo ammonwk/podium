@@ -102,7 +102,7 @@ setHandleEventCallback((event) => {
 
 // ─── Chat Sessions ──────────────────────────────────────────────────────────
 
-const chatSessions = new Map<string, LLMMessage[]>();
+const chatSessions = new Map<string, { history: LLMMessage[]; phoneNumber?: string }>();
 
 // ─── SMS Rate Limiter ───────────────────────────────────────────────────────
 
@@ -224,25 +224,27 @@ app.get('/chat/stream', (req, res) => {
 
 // POST /chat — Send chat message
 app.post('/chat', (req, res) => {
-  const { message, role, sessionId } = req.body as ChatRequest;
+  const { message, role, sessionId, phoneNumber } = req.body as ChatRequest;
 
   if (!message || !role || !sessionId) {
     res.status(400).json({ error: 'Missing message, role, or sessionId' });
     return;
   }
 
-  // Get or create session history
-  let history = chatSessions.get(sessionId);
-  if (!history) {
-    history = [];
-    chatSessions.set(sessionId, history);
+  // Get or create session
+  let session = chatSessions.get(sessionId);
+  if (!session) {
+    session = { history: [], phoneNumber };
+    chatSessions.set(sessionId, session);
+  } else if (phoneNumber && !session.phoneNumber) {
+    session.phoneNumber = phoneNumber;
   }
 
   // Push user message
-  history.push({ role: 'user', content: message });
+  session.history.push({ role: 'user', content: message });
 
   // Run chat loop in background (streaming via SSE)
-  runChatLoop(history, role, sessionId).catch((err) => {
+  runChatLoop(session.history, role, sessionId, { phoneNumber: session.phoneNumber }).catch((err) => {
     console.error('[CHAT] Error:', err);
   });
 
