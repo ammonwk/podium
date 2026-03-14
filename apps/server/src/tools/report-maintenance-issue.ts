@@ -2,6 +2,7 @@ import { v4 as uuid } from 'uuid';
 import type { ReportMaintenanceIssueInput, ReportMaintenanceIssueResult } from '@apm/shared';
 import { PropertyModel, VendorModel, WorkOrderModel } from '../shared/db.js';
 import { emitChatSSE } from '../shared/chat-sse.js';
+import { emitSSE } from '../shared/sse.js';
 import { executeSendSms } from './send-sms.js';
 import { getOwnerSettings } from '../shared/owner-settings.js';
 
@@ -62,6 +63,14 @@ export async function executeReportMaintenanceIssue(
   console.log(
     `[TOOL:report_maintenance_issue] Created pending ${workOrderId} at ${property.name} (${category}/${severity})`,
   );
+
+  // Broadcast to dashboard SSE stream so the UI updates in real-time
+  emitSSE('tool_call', {
+    tool_name: 'report_maintenance_issue',
+    input,
+    result: { work_order_id: workOrderId, property_name: property.name, severity, status: 'pending' },
+    event_name: `maintenance_${workOrderId}`,
+  });
 
   // Auto-escalate high/emergency severity to owner
   if (severity === 'high' || severity === 'emergency') {

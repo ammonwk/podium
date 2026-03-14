@@ -520,6 +520,37 @@ function applySSEEvent(
           break;
         }
 
+        case "report_maintenance_issue": {
+          const input = p.input as Record<string, unknown>;
+          const result = p.result as Record<string, unknown>;
+          const propId = input.property_id as string;
+          const severity = input.severity as string;
+          newProperties = prev.properties.map((prop) =>
+            prop.id === propId
+              ? {
+                  ...prop,
+                  status:
+                    severity === "emergency"
+                      ? ("emergency" as const)
+                      : ("attention" as const),
+                  activeIssues: [
+                    ...prop.activeIssues,
+                    input.issue_description as string,
+                  ],
+                }
+              : prop,
+          );
+          newActivities.unshift({
+            id: actId,
+            type: "work_order",
+            timestamp:
+              (payload.timestamp as string) || new Date().toISOString(),
+            data: { ...input, ...result },
+            eventName: p.event_name,
+          });
+          break;
+        }
+
         case "create_booking": {
           const input = p.input as Record<string, unknown>;
           const result = p.result as Record<string, unknown>;
