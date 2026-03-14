@@ -14,6 +14,7 @@ import { executeUpdateSchedule } from '../tools/update-schedule.js';
 import { executeScheduleTask } from '../tools/schedule-task.js';
 import { executeCreateBooking } from '../tools/create-booking.js';
 import { executeEditBooking } from '../tools/edit-booking.js';
+import { executeGetPropertyStatus } from '../tools/get-property-status.js';
 
 interface ToolCall {
   id: string;
@@ -65,6 +66,11 @@ async function executeTool(
       >;
     case TOOL_NAMES.EDIT_BOOKING:
       return (await executeEditBooking(input as any)) as unknown as Record<
+        string,
+        unknown
+      >;
+    case TOOL_NAMES.GET_PROPERTY_STATUS:
+      return (await executeGetPropertyStatus(input as any)) as unknown as Record<
         string,
         unknown
       >;

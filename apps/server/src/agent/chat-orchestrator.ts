@@ -6,6 +6,7 @@ import { buildSystemPrompt } from './system-prompt.js';
 import { toolDefinitions } from '../tools/definitions.js';
 import { executeCreateBooking } from '../tools/create-booking.js';
 import { executeEditBooking } from '../tools/edit-booking.js';
+import { executeGetPropertyStatus } from '../tools/get-property-status.js';
 
 interface ToolCall {
   id: string;
@@ -17,7 +18,7 @@ const MAX_TOOL_ITERATIONS = 5;
 
 // Subset of tools available to the interested_person chat role
 const chatBookingTools: LLMToolDefinition[] = toolDefinitions.filter(
-  (t) => t.name === TOOL_NAMES.CREATE_BOOKING || t.name === TOOL_NAMES.EDIT_BOOKING,
+  (t) => t.name === TOOL_NAMES.CREATE_BOOKING || t.name === TOOL_NAMES.EDIT_BOOKING || t.name === TOOL_NAMES.GET_PROPERTY_STATUS,
 );
 
 async function executeChatTool(
@@ -29,6 +30,8 @@ async function executeChatTool(
       return (await executeCreateBooking(input as any)) as unknown as Record<string, unknown>;
     case TOOL_NAMES.EDIT_BOOKING:
       return (await executeEditBooking(input as any)) as unknown as Record<string, unknown>;
+    case TOOL_NAMES.GET_PROPERTY_STATUS:
+      return (await executeGetPropertyStatus(input as any)) as unknown as Record<string, unknown>;
     default:
       throw new Error(`Unknown chat tool: ${name}`);
   }

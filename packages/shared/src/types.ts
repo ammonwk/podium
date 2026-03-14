@@ -147,6 +147,12 @@ export interface CreateBookingInput {
   check_out: string;
 }
 
+export interface GetPropertyStatusInput {
+  property_id?: string;
+  check_availability_start?: string;
+  check_availability_end?: string;
+}
+
 export interface EditBookingInput {
   guest_phone: string;
   property_id?: string;
@@ -238,6 +244,36 @@ export interface EditBookingResult {
   check_in: string;
   check_out: string;
   nights: number;
+}
+
+export interface PropertyStatusResult {
+  properties: PropertyStatusEntry[];
+}
+
+export interface PropertyStatusEntry {
+  property_id: string;
+  property_name: string;
+  location: string;
+  current_price: number;
+  rating: number;
+  bookings: Array<{
+    id: string;
+    guest_name: string;
+    status: string;
+    check_in: string;
+    check_out: string;
+  }>;
+  schedule_events: Array<{
+    event_type: string;
+    start_time: string;
+    end_time: string;
+    notes?: string;
+  }>;
+  available_windows: Array<{
+    start: string;
+    end: string;
+    max_nights: number;
+  }>;
 }
 
 // ─── SSE Events ──────────────────────────────────────────────────────────────

@@ -40,6 +40,7 @@ export const TOOL_NAMES = {
   SCHEDULE_TASK: 'schedule_task',
   CREATE_BOOKING: 'create_booking',
   EDIT_BOOKING: 'edit_booking',
+  GET_PROPERTY_STATUS: 'get_property_status',
 } as const;
 
 // ─── SSE Event Names ─────────────────────────────────────────────────────────
@@ -68,7 +69,7 @@ export const PROVIDERS = {
   },
 };
 
-export const DEFAULT_PROVIDER = PROVIDERS.ANTHROPIC;
+export const DEFAULT_PROVIDER = PROVIDERS.CEREBRAS;
 
 // ─── Tool Card Colors (for dashboard) ────────────────────────────────────────
 
@@ -82,6 +83,7 @@ export const TOOL_COLORS: Record<string, string> = {
   schedule_task: '#0D9488',
   create_booking: '#2563EB',
   edit_booking: '#7C3AED',
+  get_property_status: '#10B981',
 };
 
 // ─── Dashboard Theme ─────────────────────────────────────────────────────────

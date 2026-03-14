@@ -270,4 +270,29 @@ export const toolDefinitions: LLMToolDefinition[] = [
       },
     },
   },
+  {
+    name: 'get_property_status',
+    description:
+      'Get current status of one or all properties including bookings, schedule events, and available date windows. Returns property details, active/upcoming bookings, scheduled events, and open windows for booking.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        property_id: {
+          type: 'string',
+          description:
+            'Property ID to filter to one property (e.g., PROP_001). Omit to get all properties.',
+        },
+        check_availability_start: {
+          type: 'string',
+          description:
+            'Start of date window to compute availability in ISO 8601 format. Defaults to today.',
+        },
+        check_availability_end: {
+          type: 'string',
+          description:
+            'End of date window to compute availability in ISO 8601 format. Defaults to 30 days from today.',
+        },
+      },
+    },
+  },
 ];

@@ -22,7 +22,7 @@ export const ChatWidget: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
-  const [role, setRole] = useState<ChatRole>('property_owner');
+  const [role, setRole] = useState<ChatRole>('interested_person');
   const [isStreaming, setIsStreaming] = useState(false);
   const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -247,7 +247,7 @@ const styles: Record<string, React.CSSProperties> = {
     position: 'fixed',
     bottom: '24px',
     right: '24px',
-    zIndex: 900,
+    zIndex: 9000,
     width: '56px',
     height: '56px',
     borderRadius: '50%',
@@ -267,7 +267,7 @@ const styles: Record<string, React.CSSProperties> = {
     right: 0,
     bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.10)',
-    zIndex: 950,
+    zIndex: 9500,
   },
   panel: {
     position: 'fixed',
@@ -275,7 +275,7 @@ const styles: Record<string, React.CSSProperties> = {
     right: '24px',
     width: '420px',
     height: '600px',
-    zIndex: 1000,
+    zIndex: 10000,
     backgroundColor: THEME.bg.primary,
     border: `1px solid ${THEME.bg.border}`,
     borderRadius: RADIUS.lg,

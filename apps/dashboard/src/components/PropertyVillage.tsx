@@ -260,7 +260,7 @@ function House({ property, idx, pos, pal, gm, onClick }: HouseProps) {
           <Sparkles count={15} size={2} speed={0.3} scale={[2.5, 2, 2]} color="#F87171" opacity={0.35} noise={0.8} />
         )}
 
-        <Html position={[0, -1.1, 1.6]} center style={{ pointerEvents: 'none', userSelect: 'none', overflow: 'visible' }}>
+        <Html position={[0, -1.1, 1.6]} center zIndexRange={[1, 0]} style={{ pointerEvents: 'none', userSelect: 'none', overflow: 'visible' }}>
           <div style={lbl.wrap}>
             <div style={lbl.name}>{property.name}</div>
             <div style={lbl.loc}>{property.location}</div>
