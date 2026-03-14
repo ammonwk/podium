@@ -129,6 +129,23 @@ export async function runLoop(
       let result: Record<string, unknown>;
       let isError = false;
 
+      // Guard: deduplicate mutating tool calls across iterations
+      if (MUTATING_TOOLS.has(tc.name)) {
+        const dedupKey = `${tc.name}::${JSON.stringify(tc.input)}`;
+        if (executedMutatingCalls.has(dedupKey)) {
+          console.warn(`[${context.label}] Skipping duplicate mutating call: ${tc.name}`);
+          context.emitter.onToolCall(tc.name, tc.input, { error: 'This action was already performed.' }, true);
+          toolResultBlocks.push({
+            type: 'tool_result',
+            tool_use_id: tc.id,
+            content: JSON.stringify({ error: 'This action was already performed.' }),
+            is_error: true,
+          });
+          continue;
+        }
+        executedMutatingCalls.add(dedupKey);
+      }
+
       // Guard: reject tools not in the allowed set
       if (!allowedToolNames.has(tc.name)) {
         console.warn(`[${context.label}] Tool "${tc.name}" not allowed in this context`);
