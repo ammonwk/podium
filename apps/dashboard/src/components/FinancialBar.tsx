@@ -86,7 +86,7 @@ export const FinancialBar: React.FC<Props> = ({ financials }) => {
         value={financials.revenue}
         color={THEME.status.normal}
         icon="↑"
-        label="Revenue Impact"
+        label="Revenue"
         isCurrency
         prefix="+"
       />

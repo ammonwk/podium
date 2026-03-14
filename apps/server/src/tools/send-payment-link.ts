@@ -2,7 +2,11 @@ import Stripe from 'stripe';
 import type { SendPaymentLinkInput, SendPaymentLinkResult } from '@apm/shared';
 import { BookingModel, PropertyModel } from '../shared/db.js';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
+function getStripe(): Stripe {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error('STRIPE_SECRET_KEY not configured');
+  return new Stripe(key);
+}
 
 export async function executeSendPaymentLink(
   input: SendPaymentLinkInput,
@@ -52,7 +56,7 @@ export async function executeSendPaymentLink(
     year: 'numeric',
   });
 
-  const session = await stripe.checkout.sessions.create({
+  const session = await getStripe().checkout.sessions.create({
     payment_method_types: ['card'],
     line_items: [
       {
