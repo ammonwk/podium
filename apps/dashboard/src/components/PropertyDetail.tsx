@@ -8,6 +8,7 @@ interface Props {
   property: PropertyState;
   activities: ActivityItem[];
   onBack: () => void;
+  onResolveIssue?: (propertyId: string, issueIndex: number) => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -142,7 +143,7 @@ function getActivitySummary(activity: ActivityItem): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export const PropertyDetail: React.FC<Props> = ({ property, activities, onBack }) => {
+export const PropertyDetail: React.FC<Props> = ({ property, activities, onBack, onResolveIssue }) => {
   const statusColor = STATUS_COLORS[property.status] || THEME.status.normal;
   const statusLabel = STATUS_LABELS[property.status] || 'Unknown';
 
@@ -360,9 +361,39 @@ export const PropertyDetail: React.FC<Props> = ({ property, activities, onBack }
                   style={{
                     ...styles.issueRow,
                     borderLeftColor: borderColor,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
                   }}
                 >
                   <div style={styles.issueText}>{issue}</div>
+                  {onResolveIssue && (
+                    <button
+                      onClick={() => onResolveIssue(property.id, i)}
+                      style={{
+                        background: 'none',
+                        border: `1px solid ${THEME.text.secondary}`,
+                        borderRadius: RADIUS.sm,
+                        color: THEME.text.secondary,
+                        cursor: 'pointer',
+                        fontSize: '0.75rem',
+                        padding: '2px 8px',
+                        flexShrink: 0,
+                        marginLeft: SPACING.sm,
+                        transition: `all ${ANIMATION.fast}`,
+                      }}
+                      onMouseEnter={e => {
+                        (e.currentTarget as HTMLButtonElement).style.color = THEME.status.normal;
+                        (e.currentTarget as HTMLButtonElement).style.borderColor = THEME.status.normal;
+                      }}
+                      onMouseLeave={e => {
+                        (e.currentTarget as HTMLButtonElement).style.color = THEME.text.secondary;
+                        (e.currentTarget as HTMLButtonElement).style.borderColor = THEME.text.secondary;
+                      }}
+                    >
+                      ✓ Resolve
+                    </button>
+                  )}
                 </div>
               );
             })}

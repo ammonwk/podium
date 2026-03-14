@@ -206,6 +206,7 @@ const App: React.FC = () => {
               property={selectedProperty}
               activities={state.activities}
               onBack={closePropertyView}
+              onResolveIssue={state.resolveIssue}
             />
           ) : (
             <>

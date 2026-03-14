@@ -637,6 +637,7 @@ export function useSSE(): DashboardState & {
   switchProvider: () => void;
   selectEvent: (index: number) => void;
   clearError: () => void;
+  resolveIssue: (propertyId: string, issueIndex: number) => void;
 } {
   const [state, setState] = useState<DashboardState>(createInitialState);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -921,6 +922,21 @@ export function useSSE(): DashboardState & {
     setState((prev) => ({ ...prev, error: null }));
   }, []);
 
+  const resolveIssue = useCallback((propertyId: string, issueIndex: number) => {
+    setState(prev => ({
+      ...prev,
+      properties: prev.properties.map(p => {
+        if (p.id !== propertyId) return p;
+        const activeIssues = p.activeIssues.filter((_, i) => i !== issueIndex);
+        return {
+          ...p,
+          activeIssues,
+          status: activeIssues.length === 0 ? 'normal' : p.status,
+        };
+      }),
+    }));
+  }, []);
+
   return {
     ...state,
     runDemo,
@@ -929,6 +945,7 @@ export function useSSE(): DashboardState & {
     switchProvider,
     selectEvent,
     clearError,
+    resolveIssue,
   };
 }
 
