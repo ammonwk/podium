@@ -13,6 +13,7 @@ import { executeLookupGuest } from './lookup-guest.js';
 import { executeQueryDatabase } from './query-database.js';
 import { executeReportMaintenanceIssue } from './report-maintenance-issue.js';
 import { executeEscalateToOwner } from './escalate-owner.js';
+import { executeSendPaymentLink } from './send-payment-link.js';
 
 type ToolExecutor = (input: Record<string, unknown>, context?: ToolContext) => Promise<Record<string, unknown>>;
 
@@ -49,6 +50,8 @@ const registry: Record<string, ToolExecutor> = {
     executeReportMaintenanceIssue(input as any, context?.sessionId) as unknown as Promise<Record<string, unknown>>,
   [TOOL_NAMES.ESCALATE_TO_OWNER]: (input) =>
     executeEscalateToOwner(input as any) as unknown as Promise<Record<string, unknown>>,
+  [TOOL_NAMES.SEND_PAYMENT_LINK]: (input) =>
+    executeSendPaymentLink(input as any) as unknown as Promise<Record<string, unknown>>,
 };
 
 export async function executeTool(

@@ -61,6 +61,7 @@ export const TOOL_NAMES = {
   QUERY_DATABASE: 'query_database',
   REPORT_MAINTENANCE_ISSUE: 'report_maintenance_issue',
   ESCALATE_TO_OWNER: 'escalate_to_owner',
+  SEND_PAYMENT_LINK: 'send_payment_link',
 } as const;
 
 // ─── SSE Event Names ─────────────────────────────────────────────────────────
@@ -108,6 +109,7 @@ export const TOOL_COLORS: Record<string, string> = {
   query_database: '#6366F1',
   report_maintenance_issue: '#F59E0B',
   escalate_to_owner: '#DC2626',
+  send_payment_link: '#10B981',
 };
 
 // ─── Dashboard Theme ─────────────────────────────────────────────────────────

@@ -12,7 +12,7 @@ interface Props {
 export const ToolCard: React.FC<Props> = ({ toolCall, index, onClick }) => {
   const [hovered, setHovered] = useState(false);
   const color = TOOL_COLORS[toolCall.tool_name] || '#6b7280';
-  const isEmergency = (toolCall.input as Record<string, unknown>).severity === 'emergency';
+  const isEmergency = (toolCall.input as Record<string, unknown> | undefined)?.severity === 'emergency';
 
   const cardStyle: React.CSSProperties = {
     ...styles.card,

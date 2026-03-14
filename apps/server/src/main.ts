@@ -18,6 +18,7 @@ dotenv.config({ path: findEnv() });
 
 import express from 'express';
 import cors from 'cors';
+import Stripe from 'stripe';
 import type { IncomingEvent, DemoEvent, SurgeWebhookPayload, ChatRequest, LLMMessage } from '@apm/shared';
 import { AGENT_CONFIG, PROVIDERS } from '@apm/shared';
 import { connectDB, seed, shouldSeed, initSSESequence, SSEEventLogModel, ConversationModel, ChatSessionModel, ScheduledTaskModel } from './shared/db.js';
@@ -47,6 +48,67 @@ const app = express();
 // Per-session mutex to prevent concurrent runLoop executions from clobbering history
 const sessionLocks = new Map<string, Promise<void>>();
 app.use(cors());
+
+// ─── Stripe Webhook (must be before express.json() for raw body verification) ─
+const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY || '');
+
+app.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.headers['stripe-signature'] as string;
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  if (!webhookSecret) {
+    console.error('[STRIPE] Missing STRIPE_WEBHOOK_SECRET');
+    res.status(500).json({ error: 'Webhook secret not configured' });
+    return;
+  }
+
+  let event: Stripe.Event;
+  try {
+    event = stripeClient.webhooks.constructEvent(req.body, sig, webhookSecret);
+  } catch (err: any) {
+    console.error('[STRIPE] Webhook signature verification failed:', err.message);
+    res.status(400).json({ error: `Webhook signature verification failed: ${err.message}` });
+    return;
+  }
+
+  console.log(`[STRIPE] Received event: ${event.type}`);
+
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object as Stripe.Checkout.Session;
+    const bookingId = session.metadata?.booking_id;
+    const guestPhone = session.metadata?.guest_phone;
+
+    if (bookingId) {
+      console.log(`[STRIPE] Payment completed for booking ${bookingId}`);
+      await BookingModel.updateOne(
+        { id: bookingId },
+        { payment_status: 'paid' },
+      );
+
+      // Look up the booking to get guest details for the AI event
+      const booking = await BookingModel.findOne({ id: bookingId }).lean();
+      const guestName = booking?.guest_name || 'Guest';
+      const propertyId = booking?.property_id || session.metadata?.property_id || '';
+
+      // Feed a system event into the agent so it can confirm with the guest
+      enqueueEvent(
+        {
+          type: 'system',
+          source: 'system',
+          name: `Payment Received: ${guestName} (${bookingId})`,
+          payload: {
+            message: `Payment confirmed for booking ${bookingId}. Guest ${guestName} (${guestPhone}) has paid $${((session.amount_total || 0) / 100).toFixed(2)} for property ${propertyId}. Send them a confirmation message acknowledging their payment and confirming their reservation details.`,
+          },
+        },
+        guestPhone || DEMO_LANE_ID,
+        guestPhone ? 'caller' : 'demo',
+      );
+    }
+  }
+
+  res.json({ received: true });
+});
+
 app.use(express.json());
 
 const PORT = parseInt(process.env.PORT || '8000', 10);
@@ -68,7 +130,7 @@ function getCookie(header: string, name: string): string | undefined {
 const LOGIN_PAGE = `<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Homebase</title>
+<title>VibePM</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#0a0a0f;color:#e4e4e7;font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh}
@@ -83,8 +145,7 @@ button:hover{background:#6d28d9}
 .error{color:#ef4444;font-size:13px;margin-bottom:12px;display:none}
 </style></head><body>
 <div class="card">
-<div class="logo">&#127968;</div>
-<div class="title">Homebase</div>
+<div class="title">VibePM</div>
 <div class="subtitle">Enter the demo password to continue</div>
 <div class="error" id="err">Invalid password</div>
 <form id="f">
@@ -104,7 +165,7 @@ document.getElementById('f').onsubmit=async e=>{
 app.use((req, res, next) => {
   if (process.env.NODE_ENV !== 'production') return next();
   // Skip auth for webhooks, health, and login
-  if (req.path === '/surge/webhook' || req.path === '/health' || req.path === '/login') {
+  if (req.path === '/surge/webhook' || req.path === '/stripe/webhook' || req.path === '/health' || req.path === '/login') {
     return next();
   }
   // Check auth cookie
@@ -435,6 +496,18 @@ app.post('/chat', async (req, res) => {
   // Use a mutable reference to the history array so runLoop can push to it
   const history = session.history as import('@apm/shared').LLMMessage[];
 
+  // Sanitize: remove trailing assistant messages with orphaned tool_use blocks
+  // (can happen if server crashed mid-loop)
+  while (history.length > 0) {
+    const last = history[history.length - 1];
+    if (last.role !== 'assistant') break;
+    const blocks = Array.isArray(last.content) ? last.content : [];
+    const hasToolUse = blocks.some((b: any) => b.type === 'tool_use');
+    if (!hasToolUse) break;
+    console.warn(`[CHAT:${sessionId}] Removing orphaned assistant tool_use message from history`);
+    history.pop();
+  }
+
   // Run loop with per-session lock to prevent concurrent mutations
   const loopPromise = (async () => {
     try {
@@ -706,6 +779,50 @@ async function restoreScheduledTasks(): Promise<void> {
   console.log(`[SCHEDULER] Restored ${restored} pending tasks`);
 }
 
+// ─── Stripe Webhook Registration ─────────────────────────────────────────────
+
+async function ensureStripeWebhook(): Promise<void> {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    console.log('[STRIPE] No STRIPE_SECRET_KEY, skipping webhook registration');
+    return;
+  }
+
+  const appUrl = process.env.APP_URL || 'https://hackathon.plaibook.tech';
+  const webhookUrl = `${appUrl}/stripe/webhook`;
+
+  try {
+    // Check if a webhook for this URL already exists
+    const existing = await stripeClient.webhookEndpoints.list({ limit: 100 });
+    const found = existing.data.find((wh) => wh.url === webhookUrl && wh.status === 'enabled');
+
+    if (found) {
+      console.log(`[STRIPE] Webhook already registered: ${webhookUrl}`);
+      // Update the local secret to match the registered endpoint
+      if (!process.env.STRIPE_WEBHOOK_SECRET) {
+        console.warn('[STRIPE] STRIPE_WEBHOOK_SECRET not set — webhook signature verification may fail');
+      }
+      return;
+    }
+
+    // Create a new webhook endpoint
+    const endpoint = await stripeClient.webhookEndpoints.create({
+      url: webhookUrl,
+      enabled_events: ['checkout.session.completed'],
+    });
+
+    console.log(`[STRIPE] Webhook registered: ${webhookUrl}`);
+    console.log(`[STRIPE] Webhook secret: ${endpoint.secret}`);
+    console.log(`[STRIPE] ⚠️  Update STRIPE_WEBHOOK_SECRET in .env with the value above if signature verification fails`);
+
+    // Use the new secret for this session if one wasn't already set
+    if (!process.env.STRIPE_WEBHOOK_SECRET) {
+      process.env.STRIPE_WEBHOOK_SECRET = endpoint.secret!;
+    }
+  } catch (err: any) {
+    console.error('[STRIPE] Failed to register webhook (non-fatal):', err.message);
+  }
+}
+
 // ─── Startup ────────────────────────────────────────────────────────────────
 
 async function start(): Promise<void> {
@@ -722,6 +839,9 @@ async function start(): Promise<void> {
       await loadOwnerSettings();
       await restoreScheduledTasks();
     }
+
+    // Register Stripe webhook endpoint (non-blocking, non-fatal)
+    await ensureStripeWebhook();
 
     app.listen(PORT, () => {
       console.log(`\n========================================`);
