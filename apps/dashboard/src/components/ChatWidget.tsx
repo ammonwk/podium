@@ -116,7 +116,7 @@ export const ChatWidget: React.FC = () => {
   });
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const streamingTextRef = useRef('');
 
@@ -257,6 +257,7 @@ export const ChatWidget: React.FC = () => {
       { id: `streaming-${crypto.randomUUID()}`, role: 'assistant', content: '', timestamp: new Date().toISOString() },
     ]);
     setInputText('');
+    if (inputRef.current) inputRef.current.style.height = 'auto';
     setIsStreaming(true);
     streamingTextRef.current = '';
 
@@ -280,6 +281,17 @@ export const ChatWidget: React.FC = () => {
   };
 
   const handleClose = useCallback(() => setIsOpen(false), []);
+
+  const handleReset = useCallback(() => {
+    eventSourceRef.current?.close();
+    eventSourceRef.current = null;
+    setMessages([]);
+    setIsStreaming(false);
+    streamingTextRef.current = '';
+    const newId = crypto.randomUUID();
+    sessionStorage.removeItem(`chat_session_${role}`);
+    setSessionId(newId);
+  }, [role]);
 
   // Escape key to close
   useEffect(() => {
@@ -390,7 +402,15 @@ export const ChatWidget: React.FC = () => {
           {/* Header */}
           <div style={styles.header}>
             <span style={styles.headerTitle}>Chat with AI Agent</span>
-            <button style={styles.closeBtn} onClick={handleClose}>&times;</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <button style={styles.closeBtn} onClick={handleReset} title="Reset chat">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="23 4 23 10 17 10" />
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                </svg>
+              </button>
+              <button style={styles.closeBtn} onClick={handleClose}>&times;</button>
+            </div>
           </div>
 
           {/* Role selector */}
@@ -430,14 +450,18 @@ export const ChatWidget: React.FC = () => {
 
           {/* Input */}
           <div style={styles.inputArea}>
-            <input
+            <textarea
               ref={inputRef}
-              type="text"
               value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
+              onChange={(e) => {
+                setInputText(e.target.value);
+                e.target.style.height = 'auto';
+                e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+              }}
               onKeyDown={handleKeyDown}
               placeholder={isStreaming ? 'Waiting for response...' : 'Type a message...'}
               disabled={isStreaming}
+              rows={1}
               style={styles.input}
             />
             <button
@@ -670,6 +694,10 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '14px',
     fontFamily: THEME.font.sans,
     outline: 'none',
+    resize: 'none' as const,
+    overflow: 'auto',
+    lineHeight: 1.4,
+    maxHeight: '120px',
   },
   sendBtn: {
     width: '40px',
