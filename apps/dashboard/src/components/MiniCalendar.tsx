@@ -46,9 +46,9 @@ export const MiniCalendar: React.FC<Props> = ({ bookings, currentPrice, basePric
 
   const maintenanceSet = new Set(maintenanceDays);
 
-  const cellSize = compact ? 20 : 30;
-  const cellHeight = compact ? 28 : 40;
-  const gap = compact ? 1 : 2;
+  const cellSize = compact ? 40 : 30;
+  const cellHeight = compact ? 56 : 40;
+  const gap = compact ? 3 : 2;
 
   // Build grid cells
   const cells: (number | null)[] = [];
@@ -69,7 +69,7 @@ export const MiniCalendar: React.FC<Props> = ({ bookings, currentPrice, basePric
       {/* Month header */}
       <div style={{
         textAlign: 'center',
-        fontSize: compact ? 10 : 13,
+        fontSize: compact ? 16 : 13,
         fontWeight: 700,
         color: THEME.text.accent,
         letterSpacing: '-0.01em',
@@ -85,11 +85,11 @@ export const MiniCalendar: React.FC<Props> = ({ bookings, currentPrice, basePric
       }}>
         {DAY_ABBR.map((d, i) => (
           <div key={i} style={{
-            height: compact ? 12 : 18,
+            height: compact ? 24 : 18,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: compact ? 8 : 10,
+            fontSize: compact ? 12 : 10,
             fontWeight: 600,
             color: THEME.text.muted,
           }}>
@@ -137,7 +137,7 @@ export const MiniCalendar: React.FC<Props> = ({ bookings, currentPrice, basePric
                 justifyContent: 'center',
                 gap: 0,
                 backgroundColor: bgColor,
-                borderRadius: compact ? '3px' : '6px',
+                borderRadius: compact ? '6px' : '6px',
                 boxShadow: isToday && !hasColor
                   ? `inset 0 0 0 1.5px ${THEME.text.accent}`
                   : undefined,
@@ -146,7 +146,7 @@ export const MiniCalendar: React.FC<Props> = ({ bookings, currentPrice, basePric
               }}
             >
               <span style={{
-                fontSize: compact ? 9 : 11,
+                fontSize: compact ? 14 : 11,
                 fontWeight: isToday ? 700 : hasColor ? 600 : 400,
                 color: hasColor ? '#FFFFFF' : isToday ? THEME.text.accent : THEME.text.secondary,
                 lineHeight: 1,
@@ -154,7 +154,7 @@ export const MiniCalendar: React.FC<Props> = ({ bookings, currentPrice, basePric
                 {day}
               </span>
               <span style={{
-                fontSize: compact ? 6 : 8,
+                fontSize: compact ? 10 : 8,
                 fontWeight: 500,
                 lineHeight: 1,
                 marginTop: compact ? 1 : 2,
