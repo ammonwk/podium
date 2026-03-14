@@ -1,6 +1,15 @@
 import type { GetMarketDataInput, GetMarketDataResult } from '@apm/shared';
 import { PROPERTY_IDS } from '@apm/shared';
 import { PropertyModel } from '../shared/db.js';
+import { getUpcomingEvents, type LocalEvent } from '../pricing/events.js';
+
+function formatEvents(events: LocalEvent[]): string {
+  if (events.length === 0) return 'No major events upcoming';
+  return events
+    .slice(0, 3)
+    .map(e => `${e.name} on ${e.date} at ${e.venue} (${e.demand_impact} demand impact)`)
+    .join('; ');
+}
 
 export async function executeGetMarketData(
   input: GetMarketDataInput,
@@ -48,14 +57,16 @@ export async function executeGetMarketData(
       });
     }
 
-    console.log(`[TOOL:get_market_data] Park City — avg $${avgRate}, 94% occupancy`);
+    const events = await getUpcomingEvents(PROPERTY_IDS.OCEANVIEW_COTTAGE);
+    const localEvents = formatEvents(events);
+
+    console.log(`[TOOL:get_market_data] Park City — avg $${avgRate}, 94% occupancy, ${events.length} event(s)`);
 
     const result: GetMarketDataResult = {
       location: 'Park City, UT',
       avg_competitor_rate: avgRate,
       occupancy_percent: 94,
-      local_events:
-        'Park City Jazz Festival this weekend — high demand expected',
+      local_events: localEvents,
       your_properties: yourProperties,
     };
 
@@ -85,13 +96,16 @@ export async function executeGetMarketData(
       });
     }
 
-    console.log(`[TOOL:get_market_data] Moab — avg $${avgRate}, 71% occupancy`);
+    const events = await getUpcomingEvents(PROPERTY_IDS.CANYON_HOUSE);
+    const localEvents = formatEvents(events);
+
+    console.log(`[TOOL:get_market_data] Moab — avg $${avgRate}, 71% occupancy, ${events.length} event(s)`);
 
     const result: GetMarketDataResult = {
       location: 'Moab, UT',
       avg_competitor_rate: avgRate,
       occupancy_percent: 71,
-      local_events: 'No major events this weekend',
+      local_events: localEvents,
       your_properties: yourProperties,
     };
 

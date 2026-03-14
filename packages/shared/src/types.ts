@@ -30,6 +30,7 @@ export interface Property {
   wifi_password: string;
   door_code: string;
   parking_info: string;
+  zip_code: string;
 }
 
 export interface Booking {
