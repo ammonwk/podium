@@ -22,7 +22,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const PORT = parseInt(process.env.PORT || '3001', 10);
+const PORT = parseInt(process.env.PORT || '8000', 10);
 
 // ─── Event Queue (promise-chain serialization) ──────────────────────────────
 

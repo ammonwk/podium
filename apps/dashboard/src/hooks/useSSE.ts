@@ -109,33 +109,31 @@ const INITIAL_PROPERTIES: PropertyState[] = [
     id: PROPERTY_IDS.MOUNTAIN_LOFT,
     name: 'Mountain Loft',
     location: 'Park City, UT',
-    current_price: 225,
-    base_price: 225,
+    current_price: 145,
+    base_price: 145,
     rating: 4.8,
     review_count: 89,
     status: 'normal',
     activeIssues: [],
     schedule: [
-      { type: 'checkin', start: 55, end: 75 },
+      { type: 'checkout', start: 0, end: 20 },
+      { type: 'cleaning', start: 20, end: 42 },
+      { type: 'checkin', start: 60, end: 80 },
     ],
-    guestFlow: 'James (mid-stay)',
+    guestFlow: 'James → Anna',
   },
   {
     id: PROPERTY_IDS.CANYON_HOUSE,
     name: 'Canyon House',
-    location: 'Park City, UT',
-    current_price: 175,
-    base_price: 175,
+    location: 'Moab, UT',
+    current_price: 285,
+    base_price: 285,
     rating: 4.4,
-    review_count: 203,
+    review_count: 52,
     status: 'normal',
     activeIssues: [],
-    schedule: [
-      { type: 'checkout', start: 10, end: 30 },
-      { type: 'cleaning', start: 30, end: 55 },
-      { type: 'checkin', start: 65, end: 85 },
-    ],
-    guestFlow: 'Lisa → Anna',
+    schedule: [],
+    guestFlow: 'Lisa (mid-stay)',
   },
 ];
 
@@ -552,16 +550,28 @@ export function useSSE(): DashboardState & {
   const switchProvider = useCallback(async () => {
     const serverUrl = getServerUrl();
     try {
-      const resp = await fetch(`${serverUrl}/api/provider`, { method: 'POST' });
-      const data = await resp.json();
-      setState(prev => ({
-        ...prev,
-        providerConfig: { provider: data.provider, model: data.model },
-      }));
+      // Toggle between Anthropic and Cerebras
+      const nextConfig = state.providerConfig.provider === 'anthropic'
+        ? { provider: 'cerebras', model: 'zai-glm-4.7' }
+        : { provider: 'anthropic', model: 'claude-opus-4-6' };
+
+      const resp = await fetch(`${serverUrl}/api/provider`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(nextConfig),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        const config = data.provider || data;
+        setState(prev => ({
+          ...prev,
+          providerConfig: { provider: config.provider, model: config.model },
+        }));
+      }
     } catch (err) {
       console.error('Failed to switch provider:', err);
     }
-  }, []);
+  }, [state.providerConfig.provider]);
 
   const selectEvent = useCallback((index: number) => {
     setState(prev => ({ ...prev, activeEventIndex: index }));

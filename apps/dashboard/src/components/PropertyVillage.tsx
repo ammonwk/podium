@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { THEME } from '@apm/shared';
-import { SHADOW, ANIMATION } from '../styles/theme';
+import { SHADOW, ANIMATION, RADIUS } from '../styles/theme';
 import type { PropertyState } from '../hooks/useSSE';
 
 interface Props {
@@ -8,10 +8,15 @@ interface Props {
   onPropertyClick: (property: PropertyState) => void;
 }
 
-const STATUS_COLORS: Record<string, { roof: string; walls: string; accent: string }> = {
-  normal: { roof: '#86EFAC', walls: '#F0FDF4', accent: '#059669' },
-  attention: { roof: '#FCD34D', walls: '#FFFBEB', accent: '#D97706' },
-  emergency: { roof: '#FCA5A5', walls: '#FEF2F2', accent: '#DC2626' },
+const HOUSE_STYLES: Array<{ roof: string; walls: string; door: string; accent: string }> = [
+  { roof: '#86EFAC', walls: '#F0FDF4', door: '#059669', accent: '#059669' },  // Green cottage
+  { roof: '#93C5FD', walls: '#EFF6FF', door: '#2563EB', accent: '#3B82F6' },  // Blue loft
+  { roof: '#FCD34D', walls: '#FFFBEB', door: '#D97706', accent: '#D97706' },  // Amber house
+];
+
+const STATUS_OVERLAYS: Record<string, { roof: string; glow: string }> = {
+  attention: { roof: '#FCD34D', glow: 'rgba(217, 119, 6, 0.15)' },
+  emergency: { roof: '#FCA5A5', glow: 'rgba(220, 38, 38, 0.15)' },
 };
 
 export const PropertyVillage: React.FC<Props> = ({ properties, onPropertyClick }) => {
@@ -23,6 +28,7 @@ export const PropertyVillage: React.FC<Props> = ({ properties, onPropertyClick }
             key={property.id}
             property={property}
             index={i}
+            houseStyle={HOUSE_STYLES[i % HOUSE_STYLES.length]}
             onClick={() => onPropertyClick(property)}
           />
         ))}
@@ -34,108 +40,88 @@ export const PropertyVillage: React.FC<Props> = ({ properties, onPropertyClick }
 const IsometricHouse: React.FC<{
   property: PropertyState;
   index: number;
+  houseStyle: typeof HOUSE_STYLES[0];
   onClick: () => void;
-}> = ({ property, index, onClick }) => {
+}> = ({ property, index, houseStyle, onClick }) => {
   const [hovered, setHovered] = useState(false);
-  const colors = STATUS_COLORS[property.status] || STATUS_COLORS.normal;
   const hasIssue = property.status !== 'normal';
+  const statusOverlay = STATUS_OVERLAYS[property.status];
+  const roofColor = statusOverlay?.roof || houseStyle.roof;
   const priceDelta = property.current_price - property.base_price;
 
   return (
     <div
       style={{
         ...styles.houseWrapper,
-        animation: `houseEntrance 0.6s ${ANIMATION.easeOut} both`,
-        animationDelay: `${index * 150}ms`,
+        animationDelay: `${index * 120}ms`,
       }}
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {/* 3D House */}
-      <div
-        style={{
-          ...styles.houseContainer,
-          transform: hovered
-            ? 'rotateX(-20deg) rotateY(45deg) translateY(-10px) scale(1.05)'
-            : 'rotateX(-20deg) rotateY(45deg)',
-          ...(hasIssue && property.status === 'emergency'
-            ? { animation: 'gentleShake 2s ease-in-out infinite' }
-            : {}),
-        }}
-      >
-        {/* Chimney smoke */}
-        <div style={styles.chimneyContainer}>
+      {/* 3D House — perspective is scoped HERE so text below stays flat */}
+      <div style={styles.perspectiveBox}>
+        <div
+          style={{
+            ...styles.houseBody,
+            transform: hovered
+              ? 'rotateX(-20deg) rotateY(45deg) translateY(-8px) scale(1.06)'
+              : 'rotateX(-20deg) rotateY(45deg)',
+            filter: hovered ? 'drop-shadow(0 16px 24px rgba(0,0,0,0.12))' : 'drop-shadow(0 8px 16px rgba(0,0,0,0.06))',
+            ...(hasIssue && property.status === 'emergency'
+              ? { animation: 'gentleShake 3s ease-in-out infinite' }
+              : {}),
+          }}
+        >
+          {/* Roof */}
           <div style={{
-            ...styles.chimney,
-            backgroundColor: colors.accent,
+            ...styles.roofLeft,
+            background: `linear-gradient(135deg, ${roofColor}, ${roofColor}dd)`,
           }} />
-          <div style={styles.smokeParticle} />
-          <div style={{ ...styles.smokeParticle, animationDelay: '0.5s', left: '4px' }} />
-        </div>
-
-        {/* Roof - two angled planes */}
-        <div style={{
-          ...styles.roofLeft,
-          background: `linear-gradient(135deg, ${colors.roof}, ${colors.roof}dd)`,
-          boxShadow: hovered ? '0 -4px 20px rgba(0,0,0,0.1)' : '0 -2px 8px rgba(0,0,0,0.05)',
-        }} />
-        <div style={{
-          ...styles.roofRight,
-          background: `linear-gradient(225deg, ${colors.roof}cc, ${colors.roof}99)`,
-        }} />
-
-        {/* Front face */}
-        <div style={{
-          ...styles.wallFront,
-          background: colors.walls,
-          borderColor: hovered ? colors.accent + '40' : '#E8E5DE',
-        }}>
-          {/* Door */}
           <div style={{
-            ...styles.door,
-            backgroundColor: colors.accent + '30',
-            borderColor: colors.accent + '50',
+            ...styles.roofRight,
+            background: `linear-gradient(225deg, ${roofColor}cc, ${roofColor}88)`,
           }} />
-          {/* Windows */}
-          <div style={styles.windowRow}>
+
+          {/* Front face */}
+          <div style={{
+            ...styles.wallFront,
+            backgroundColor: houseStyle.walls,
+            borderColor: hovered ? houseStyle.accent + '40' : '#E8E5DE',
+          }}>
+            <div style={styles.windowRow}>
+              <div style={{
+                ...styles.windowBox,
+                backgroundColor: property.status === 'emergency' ? '#FCA5A5' : '#BFDBFE',
+                ...(property.status === 'emergency' ? { animation: 'windowFlicker 1s ease-in-out infinite' } : {}),
+              }} />
+              <div style={{
+                ...styles.windowBox,
+                backgroundColor: property.status === 'emergency' ? '#FCA5A5' : '#BFDBFE',
+                ...(property.status === 'emergency' ? { animation: 'windowFlicker 1s ease-in-out infinite 0.3s' } : {}),
+              }} />
+            </div>
             <div style={{
-              ...styles.window,
-              backgroundColor: property.status === 'emergency' ? '#FCA5A5' : '#BFDBFE',
-              ...(property.status === 'emergency'
-                ? { animation: 'windowFlicker 1s ease-in-out infinite' }
-                : {}),
+              ...styles.door,
+              backgroundColor: houseStyle.door + '25',
+              borderColor: houseStyle.door + '50',
             }} />
+          </div>
+
+          {/* Right side face */}
+          <div style={{
+            ...styles.wallRight,
+            backgroundColor: houseStyle.walls + 'dd',
+          }}>
             <div style={{
-              ...styles.window,
-              backgroundColor: property.status === 'emergency' ? '#FCA5A5' : '#BFDBFE',
-              ...(property.status === 'emergency'
-                ? { animation: 'windowFlicker 1s ease-in-out infinite 0.3s' }
-                : {}),
+              ...styles.sideWindow,
+              backgroundColor: '#BFDBFE',
             }} />
           </div>
         </div>
-
-        {/* Right face */}
-        <div style={{
-          ...styles.wallRight,
-          background: `linear-gradient(180deg, ${colors.walls}ee, ${colors.walls}cc)`,
-        }}>
-          <div style={{
-            ...styles.sideWindow,
-            backgroundColor: property.status === 'emergency' ? '#FCA5A5' : '#BFDBFE',
-          }} />
-        </div>
-
-        {/* Shadow beneath house */}
-        <div style={{
-          ...styles.houseShadow,
-          opacity: hovered ? 0.15 : 0.08,
-          transform: hovered ? 'scale(1.1)' : 'scale(1)',
-        }} />
       </div>
 
-      {/* Property info below house */}
+      {/* Info below house — FLAT, no perspective */}
       <div style={styles.infoContainer}>
         <div style={styles.propertyName}>{property.name}</div>
         <div style={styles.location}>{property.location}</div>
@@ -146,7 +132,7 @@ const IsometricHouse: React.FC<{
               ? 'rgba(5, 150, 105, 0.1)'
               : priceDelta < 0
               ? 'rgba(220, 38, 38, 0.1)'
-              : 'rgba(107, 114, 128, 0.08)',
+              : 'rgba(0, 0, 0, 0.04)',
             color: priceDelta > 0
               ? THEME.status.normal
               : priceDelta < 0
@@ -164,13 +150,16 @@ const IsometricHouse: React.FC<{
           <div style={{
             ...styles.statusBadge,
             backgroundColor: property.status === 'emergency'
-              ? 'rgba(220, 38, 38, 0.1)'
-              : 'rgba(217, 119, 6, 0.1)',
+              ? 'rgba(220, 38, 38, 0.08)'
+              : 'rgba(217, 119, 6, 0.08)',
             color: property.status === 'emergency'
               ? THEME.status.emergency
               : THEME.status.attention,
+            borderColor: property.status === 'emergency'
+              ? 'rgba(220, 38, 38, 0.2)'
+              : 'rgba(217, 119, 6, 0.2)',
           }}>
-            {property.status === 'emergency' ? '⚠ Emergency' : '● Attention needed'}
+            {property.status === 'emergency' ? '⚠ Emergency' : '● Attention'}
           </div>
         )}
       </div>
@@ -188,74 +177,54 @@ const styles: Record<string, React.CSSProperties> = {
   },
   village: {
     display: 'flex',
-    gap: '80px',
+    gap: '72px',
     alignItems: 'flex-end',
-    perspective: '1200px',
   },
   houseWrapper: {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: '16px',
+    gap: '12px',
     cursor: 'pointer',
-    transition: `all ${ANIMATION.slow} ${ANIMATION.easeOut}`,
+    animation: `fadeIn 0.5s ${ANIMATION.easeOut} both`,
   },
-  houseContainer: {
+
+  // Perspective scoped to just the 3D house
+  perspectiveBox: {
+    perspective: '800px',
+    perspectiveOrigin: '50% 50%',
+  },
+  houseBody: {
     position: 'relative',
-    width: '120px',
-    height: '120px',
+    width: '110px',
+    height: '110px',
     transformStyle: 'preserve-3d',
     transform: 'rotateX(-20deg) rotateY(45deg)',
     transition: `all ${ANIMATION.slow} ${ANIMATION.easeOut}`,
   },
 
-  // Chimney
-  chimneyContainer: {
-    position: 'absolute',
-    top: '-28px',
-    left: '20px',
-    zIndex: 10,
-  },
-  chimney: {
-    width: '12px',
-    height: '18px',
-    borderRadius: '2px 2px 0 0',
-  },
-  smokeParticle: {
-    position: 'absolute',
-    top: '-6px',
-    left: '2px',
-    width: '8px',
-    height: '8px',
-    borderRadius: '50%',
-    backgroundColor: 'rgba(156, 163, 175, 0.4)',
-    animation: 'chimneySmoke 2s ease-out infinite',
-  },
-
   // Roof
   roofLeft: {
     position: 'absolute',
-    width: '100%',
-    height: '40px',
-    top: '-20px',
-    left: '-10px',
-    transform: 'rotateZ(-8deg)',
+    width: '115%',
+    height: '36px',
+    top: '-16px',
+    left: '-8%',
     borderRadius: '4px 4px 0 0',
     zIndex: 5,
-    transition: `all ${ANIMATION.slow} ${ANIMATION.easeOut}`,
   },
   roofRight: {
     position: 'absolute',
-    width: '60%',
-    height: '40px',
-    top: '-18px',
-    right: '-5px',
-    transform: 'rotateZ(4deg) skewX(-10deg)',
+    width: '55%',
+    height: '36px',
+    top: '-14px',
+    right: '-8px',
+    transform: 'skewX(-8deg)',
     borderRadius: '0 4px 0 0',
     zIndex: 4,
   },
 
-  // Walls
+  // Front wall
   wallFront: {
     position: 'absolute',
     width: '100%',
@@ -266,46 +235,44 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    padding: '8px',
-    gap: '6px',
-    transition: `all ${ANIMATION.slow} ${ANIMATION.easeOut}`,
+    justifyContent: 'space-between',
+    padding: '10px 14px 8px',
     zIndex: 3,
+    transition: `border-color ${ANIMATION.slow} ${ANIMATION.easeOut}`,
   },
+  windowRow: {
+    display: 'flex',
+    gap: '14px',
+    width: '100%',
+    justifyContent: 'center',
+  },
+  windowBox: {
+    width: '20px',
+    height: '20px',
+    borderRadius: '3px',
+    border: '1.5px solid rgba(0,0,0,0.06)',
+    transition: `background-color ${ANIMATION.fast}`,
+  },
+  door: {
+    width: '20px',
+    height: '26px',
+    borderRadius: '10px 10px 0 0',
+    border: '1.5px solid',
+  },
+
+  // Right side wall
   wallRight: {
     position: 'absolute',
-    width: '40px',
+    width: '35px',
     height: '80px',
     bottom: '0',
-    right: '-20px',
-    transform: 'skewY(-10deg)',
+    right: '-18px',
+    transform: 'skewY(-12deg)',
     borderRadius: '0 4px 4px 0',
     zIndex: 2,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-
-  // Door & windows
-  door: {
-    width: '22px',
-    height: '30px',
-    borderRadius: '10px 10px 0 0',
-    border: '1.5px solid',
-  },
-  windowRow: {
-    position: 'absolute',
-    top: '10px',
-    left: '50%',
-    transform: 'translateX(-50%)',
-    display: 'flex',
-    gap: '12px',
-  },
-  window: {
-    width: '18px',
-    height: '18px',
-    borderRadius: '3px',
-    border: '1.5px solid rgba(0,0,0,0.08)',
   },
   sideWindow: {
     width: '14px',
@@ -314,25 +281,13 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid rgba(0,0,0,0.06)',
   },
 
-  // Shadow
-  houseShadow: {
-    position: 'absolute',
-    bottom: '-15px',
-    left: '10%',
-    width: '80%',
-    height: '20px',
-    background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.15) 0%, transparent 70%)',
-    borderRadius: '50%',
-    transition: `all ${ANIMATION.slow} ${ANIMATION.easeOut}`,
-  },
-
-  // Info
+  // Info below house (completely flat — no 3D transform inheritance)
   infoContainer: {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: '3px',
-    marginTop: '8px',
+    gap: '2px',
+    paddingTop: '4px',
   },
   propertyName: {
     fontSize: '15px',
@@ -374,8 +329,9 @@ const styles: Record<string, React.CSSProperties> = {
   statusBadge: {
     fontSize: '11px',
     fontWeight: 600,
-    padding: '2px 8px',
+    padding: '2px 10px',
     borderRadius: '10px',
     marginTop: '4px',
+    border: '1px solid',
   },
 };

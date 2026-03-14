@@ -62,7 +62,7 @@ export const PROVIDERS = {
   },
   CEREBRAS: {
     provider: 'cerebras' as const,
-    model: 'llama-4-scout-17b-16e-instruct',
+    model: 'zai-glm-4.7',
   },
 };
 

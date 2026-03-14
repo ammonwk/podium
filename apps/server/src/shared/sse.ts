@@ -15,15 +15,18 @@ export function addClient(res: Response): void {
 }
 
 export function emitSSE(type: SSEEventType, payload: unknown): void {
-  const event = {
-    id: uuid(),
-    type,
-    timestamp: new Date().toISOString(),
-    payload,
-  };
+  const id = uuid();
+  const timestamp = new Date().toISOString();
 
-  const data = JSON.stringify(event);
-  const message = `id: ${event.id}\nevent: ${type}\ndata: ${data}\n\n`;
+  // Flatten payload into the data object so the client receives fields at the top level
+  // (EventSource listeners parse e.data and expect payload fields directly, not nested under .payload)
+  const data = JSON.stringify({
+    id,
+    type,
+    timestamp,
+    ...(payload as Record<string, unknown>),
+  });
+  const message = `id: ${id}\nevent: ${type}\ndata: ${data}\n\n`;
 
   for (const client of clients) {
     try {
