@@ -24,8 +24,21 @@ function formatBold(text: string): React.ReactNode {
   );
 }
 
+const FRIENDLY_TOOL_NAMES: Record<string, string> = {
+  query_database: 'Looking up records',
+  lookup_guest: 'Finding guest info',
+  create_booking: 'Creating a booking',
+  edit_booking: 'Updating booking',
+  get_property_status: 'Checking properties',
+  report_maintenance_issue: 'Reporting an issue',
+  escalate_to_owner: 'Notifying owner',
+  create_work_order: 'Creating work order',
+  update_work_order: 'Updating work order',
+  send_message: 'Sending a message',
+};
+
 function formatToolName(name: string): string {
-  return name.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  return FRIENDLY_TOOL_NAMES[name] || name.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function summarizeToolResult(toolName: string, result: Record<string, unknown>, isError: boolean): string {
@@ -57,10 +70,27 @@ function summarizeToolResult(toolName: string, result: Record<string, unknown>, 
   if (toolName === 'escalate_to_owner') {
     return `Escalated to owner: ${result.summary_sent}`;
   }
+  if (toolName === 'query_database') {
+    const collection = result.collection as string || '';
+    const count = result.count as number;
+    const friendlyCollection: Record<string, string> = {
+      workorders: 'work orders',
+      bookings: 'bookings',
+      properties: 'properties',
+      guests: 'guests',
+      messages: 'messages',
+      emergencies: 'emergency reports',
+    };
+    const label = friendlyCollection[collection] || collection.replace(/_/g, ' ');
+    if (count === 0) return `No ${label} found`;
+    return `Found ${count} ${label}`;
+  }
 
-  // Fallback: show first few keys
-  const keys = Object.keys(result).slice(0, 3);
-  return keys.map((k) => `${k}: ${JSON.stringify(result[k])}`).join(', ');
+  // Fallback: generic friendly summary
+  if (typeof result.count === 'number') return `Found ${result.count} results`;
+  if (result.status) return `${result.status}`;
+  if (result.message) return `${result.message}`;
+  return 'Done';
 }
 
 const ROLES: { key: ChatRole; label: string }[] = [
