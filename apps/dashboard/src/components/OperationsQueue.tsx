@@ -614,35 +614,46 @@ const ExpandedDetail: React.FC<{
     | { kind: 'reasoning' };
 
   const items: TimelineItem[] = [];
+  let toolIdx = 0;
 
-  // 1. Incoming SMS trigger is always first
-  if (lane.triggerPreview) {
-    items.push({ kind: 'inbound_sms', from: lane.triggerFrom || 'Guest', body: lane.triggerPreview, ts: 0 });
-  }
-
-  // 2. Reasoning (if active and has thinking text)
-  if (lane.currentEvent?.thinkingText) {
-    items.push({ kind: 'reasoning' });
-  }
-
-  // 3. Tool calls in order, splitting SMS out as chat bubbles
-  lane.allToolCalls.forEach((tc, i) => {
-    if (tc.tool_name === 'send_sms') {
-      const input = tc.input as Record<string, unknown>;
-      const result = tc.result as Record<string, unknown>;
+  // Walk through events in order, interleaving each event's trigger message
+  // before its tool calls so the full back-and-forth conversation is shown.
+  for (const ev of lane.events) {
+    // Inbound trigger for this event
+    if (ev.triggerMessage?.body) {
       items.push({
-        kind: 'outbound_sms',
-        to: (result.recipient_name as string) || (input.to as string) || 'Guest',
-        body: (input.body as string) || '',
-        status: (result.status as string) || 'queued',
-        timestamp: (result.timestamp as string) || '',
-        tc,
-        idx: i,
+        kind: 'inbound_sms',
+        from: ev.triggerMessage.name || ev.triggerMessage.from || 'Guest',
+        body: ev.triggerMessage.body,
+        ts: ev.startedAt ? new Date(ev.startedAt).getTime() : 0,
       });
-    } else {
-      items.push({ kind: 'tool', tc, idx: i });
     }
-  });
+
+    // Reasoning (only for the currently active event)
+    if (ev === lane.currentEvent && ev.thinkingText) {
+      items.push({ kind: 'reasoning' });
+    }
+
+    // Tool calls for this event
+    for (const tc of ev.toolCalls) {
+      if (tc.tool_name === 'send_sms') {
+        const input = tc.input as Record<string, unknown>;
+        const result = tc.result as Record<string, unknown>;
+        items.push({
+          kind: 'outbound_sms',
+          to: (result.recipient_name as string) || (input.to as string) || 'Guest',
+          body: (input.body as string) || '',
+          status: (result.status as string) || 'queued',
+          timestamp: (result.timestamp as string) || '',
+          tc,
+          idx: toolIdx,
+        });
+      } else {
+        items.push({ kind: 'tool', tc, idx: toolIdx });
+      }
+      toolIdx++;
+    }
+  }
 
   return (
     <div style={expandedStyle} onClick={(e) => e.stopPropagation()}>

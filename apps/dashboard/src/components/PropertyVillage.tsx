@@ -147,8 +147,8 @@ const SceneContent: React.FC<Props> = ({ properties, onPropertyClick }) => {
         shadow-mapSize={[1024, 1024]}
         shadow-camera-near={1}
         shadow-camera-far={25}
-        shadow-camera-left={-10}
-        shadow-camera-right={10}
+        shadow-camera-left={-14}
+        shadow-camera-right={14}
         shadow-camera-top={8}
         shadow-camera-bottom={-4}
         shadow-bias={-0.001}
@@ -160,14 +160,14 @@ const SceneContent: React.FC<Props> = ({ properties, onPropertyClick }) => {
           key={p.id}
           property={p}
           idx={i}
-          pos={[(i - 1) * 4.8, 0, 0]}
+          pos={[(i - 1) * 6.5, 0, 0]}
           pal={PALETTES[i % PALETTES.length]}
           gm={gm}
           onClick={() => onPropertyClick(p)}
         />
       ))}
 
-      <ContactShadows position={[0, 0.004, 0]} opacity={0.2} scale={20} blur={3} far={3} frames={1} color="#7B7060" />
+      <ContactShadows position={[0, 0.004, 0]} opacity={0.2} scale={28} blur={3} far={3} frames={1} color="#7B7060" />
 
       {LANDSCAPE.map((l, i) => {
         if (l.type === 'pine') return <PineTree key={i} position={l.pos} scale={l.s} color={l.c} gm={gm} />;
@@ -179,14 +179,14 @@ const SceneContent: React.FC<Props> = ({ properties, onPropertyClick }) => {
 };
 
 const LANDSCAPE: { type: 'pine' | 'round' | 'bush'; pos: [number, number, number]; s: number; c: string }[] = [
-  { type: 'round', pos: [-6.5, 0, -0.3], s: 0.7, c: '#6EAD72' },
-  { type: 'round', pos: [-5.8, 0, 1.1], s: 0.5, c: '#82BD86' },
-  { type: 'bush', pos: [-5.1, 0, 0.2], s: 0.35, c: '#7BBF80' },
-  { type: 'pine', pos: [-1.6, 0, 1.0], s: 0.65, c: '#5A9A5E' },
-  { type: 'pine', pos: [1.5, 0, 0.8], s: 0.5, c: '#4E8E52' },
-  { type: 'round', pos: [6.8, 0, 0.8], s: 0.7, c: '#6EAD72' },
-  { type: 'round', pos: [7.5, 0, 1.3], s: 0.5, c: '#82BD86' },
-  { type: 'bush', pos: [7.2, 0, 0.2], s: 0.3, c: '#7BBF80' },
+  { type: 'round', pos: [-9.0, 0, -0.3], s: 0.7, c: '#6EAD72' },
+  { type: 'round', pos: [-8.3, 0, 1.1], s: 0.5, c: '#82BD86' },
+  { type: 'bush', pos: [-7.5, 0, 0.2], s: 0.35, c: '#7BBF80' },
+  { type: 'pine', pos: [-2.5, 0, 1.0], s: 0.65, c: '#5A9A5E' },
+  { type: 'pine', pos: [2.5, 0, 0.8], s: 0.5, c: '#4E8E52' },
+  { type: 'round', pos: [9.0, 0, 0.8], s: 0.7, c: '#6EAD72' },
+  { type: 'round', pos: [9.7, 0, 1.3], s: 0.5, c: '#82BD86' },
+  { type: 'bush', pos: [9.4, 0, 0.2], s: 0.3, c: '#7BBF80' },
 ];
 
 /* ═══════════════════════════════════════════════════════════════════════ */
@@ -270,9 +270,11 @@ function House({ property, idx, pos, pal, gm, onClick }: HouseProps) {
       activeHouse.idx = idx;
       document.body.style.cursor = 'pointer';
       setHovered(true);
-    } else if (!isNear && wasNear.current && activeHouse.idx === idx) {
-      activeHouse.idx = -1;
-      document.body.style.cursor = 'auto';
+    } else if (!isNear && wasNear.current) {
+      if (activeHouse.idx === idx) {
+        activeHouse.idx = -1;
+        document.body.style.cursor = 'auto';
+      }
       setHovered(false);
     }
     wasNear.current = isNear;

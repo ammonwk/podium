@@ -35,9 +35,10 @@ export async function executeAdjustPrice(
       adjustedPrice = weekendFloor;
     }
   } else {
-    // Weekdays: cap at base price unless there's a surge reason
+    // Weekdays: cap at base price unless there's an event-driven surge reason
     const weekdayCeiling = property.base_price;
-    if (adjustedPrice > weekdayCeiling && new_price <= property.base_price) {
+    const hasSurgeReason = /event|festival|concert|game|surge|demand|sold.?out/i.test(reason || '');
+    if (adjustedPrice > weekdayCeiling && !hasSurgeReason) {
       adjustedPrice = weekdayCeiling;
     }
   }

@@ -1,7 +1,6 @@
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
-import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 
 // Walk up from cwd to find .env (turbo runs from apps/server/, .env is at repo root)
@@ -117,85 +116,6 @@ app.use(express.json());
 
 const PORT = parseInt(process.env.PORT || '8000', 10);
 
-// ─── Auth Gate ──────────────────────────────────────────────────────────────
-
-const AUTH_PASSWORD = process.env.AUTH_PASSWORD || 'secret demo password';
-const AUTH_SECRET = process.env.AUTH_SECRET || 'podium-hackathon-auth';
-
-function makeAuthToken(): string {
-  return crypto.createHmac('sha256', AUTH_SECRET).update('authenticated').digest('hex');
-}
-
-function getCookie(header: string, name: string): string | undefined {
-  const match = header.split(';').find(c => c.trim().startsWith(`${name}=`));
-  return match ? match.split('=').slice(1).join('=').trim() : undefined;
-}
-
-const LOGIN_PAGE = `<!DOCTYPE html>
-<html lang="en"><head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>VibePM</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{background:#0a0a0f;color:#e4e4e7;font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh}
-.card{background:#16161e;border:1px solid #27272a;border-radius:16px;padding:48px 40px;width:100%;max-width:380px;text-align:center}
-.logo{font-size:36px;margin-bottom:12px}
-.title{font-size:22px;font-weight:800;letter-spacing:-0.03em;margin-bottom:4px}
-.subtitle{font-size:14px;color:#71717a;margin-bottom:32px}
-input{width:100%;padding:12px 16px;background:#0a0a0f;border:1px solid #27272a;border-radius:10px;color:#e4e4e7;font-size:15px;outline:none;margin-bottom:16px;font-family:inherit}
-input:focus{border-color:#7c3aed}
-button{width:100%;padding:12px;background:#7c3aed;border:none;border-radius:10px;color:#fff;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;transition:background .15s}
-button:hover{background:#6d28d9}
-.error{color:#ef4444;font-size:13px;margin-bottom:12px;display:none}
-</style></head><body>
-<div class="card">
-<div class="title">VibePM</div>
-<div class="subtitle">Enter the demo password to continue</div>
-<div class="error" id="err">Invalid password</div>
-<form id="f">
-<input type="password" id="pw" placeholder="Password" autofocus>
-<button type="submit">Enter</button>
-</form>
-</div>
-<script>
-document.getElementById('f').onsubmit=async e=>{
-  e.preventDefault();
-  const res=await fetch('/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:document.getElementById('pw').value})});
-  if(res.ok){window.location.reload()}else{document.getElementById('err').style.display='block'}
-};
-</script></body></html>`;
-
-// Auth middleware (only in production — dev uses Vite proxy without auth)
-app.use((req, res, next) => {
-  if (process.env.NODE_ENV !== 'production') return next();
-  // Skip auth for webhooks, health, and login
-  if (req.path === '/surge/webhook' || req.path === '/stripe/webhook' || req.path === '/health' || req.path === '/login') {
-    return next();
-  }
-  // Check auth cookie
-  const token = getCookie(req.headers.cookie || '', 'auth');
-  if (token === makeAuthToken()) {
-    return next();
-  }
-  // API/SSE requests get 401
-  if (req.path.startsWith('/api') || req.path === '/events/stream' || req.path.startsWith('/chat')) {
-    res.status(401).json({ error: 'Not authenticated' });
-    return;
-  }
-  // Everything else gets the login page
-  res.send(LOGIN_PAGE);
-});
-
-// Login endpoint
-app.post('/login', (req, res) => {
-  if (req.body?.password === AUTH_PASSWORD) {
-    const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
-    res.setHeader('Set-Cookie', `auth=${makeAuthToken()}; Path=/; HttpOnly; SameSite=Strict; Max-Age=604800${secure}`);
-    res.json({ status: 'ok' });
-  } else {
-    res.status(401).json({ error: 'Invalid password' });
-  }
-});
 
 // Rewrite /api/* to /* (Vite dev proxy strips this prefix; this does the same in production)
 app.use((req, _res, next) => {
