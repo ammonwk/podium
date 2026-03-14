@@ -20,11 +20,11 @@ import express from 'express';
 import cors from 'cors';
 import type { IncomingEvent, DemoEvent, SurgeWebhookPayload, ChatRequest, LLMMessage } from '@apm/shared';
 import { AGENT_CONFIG, PROVIDERS } from '@apm/shared';
-import { connectDB, seed } from './shared/db.js';
+import { connectDB, seed, shouldSeed, initSSESequence, SSEEventLogModel, ConversationModel, ChatSessionModel, ScheduledTaskModel } from './shared/db.js';
 import { addClient, emitSSE } from './shared/sse.js';
 import type { LaneContext } from './shared/sse.js';
 import { resetState } from './shared/state.js';
-import { cancelAll as cancelAllTasks } from './shared/scheduler.js';
+import { cancelAll as cancelAllTasks, registerTask } from './shared/scheduler.js';
 import { getProviderConfig, setProvider } from './shared/llm/client.js';
 import { runLoop } from './agent/orchestrator.js';
 import { createDashboardEmitter, createChatEmitter } from './agent/emitters.js';
@@ -33,7 +33,7 @@ import { addChatClient, clearAllChatClients } from './shared/chat-sse.js';
 import { setHandleEventCallback } from './tools/schedule-task.js';
 import { laneManager, DEMO_LANE_ID } from './shared/lane-manager.js';
 import type { ConversationType } from './shared/lane-manager.js';
-import { getOwnerSettings, setOwnerSettings } from './shared/owner-settings.js';
+import { getOwnerSettings, setOwnerSettings, loadOwnerSettings } from './shared/owner-settings.js';
 import { buildSystemPrompt } from './agent/system-prompt.js';
 import { ALL_TOOLS, CHAT_BOOKING_TOOLS, NO_TOOLS } from './tools/definitions.js';
 import { normalizePhone } from './shared/phone-utils.js';
@@ -163,6 +163,9 @@ async function handleEvent(event: IncomingEvent, laneId: string, laneType: Conve
     systemPrompt: buildSystemPrompt(),
     emitter: createDashboardEmitter(laneContext),
   });
+
+  // Persist conversation history to MongoDB
+  await laneManager.persist(laneId);
 }
 
 function enqueueEvent(event: IncomingEvent, laneId: string, laneType: ConversationType): void {
@@ -197,9 +200,7 @@ setHandleEventCallback((event) => {
   enqueueEvent(event, DEMO_LANE_ID, 'demo');
 });
 
-// ─── Chat Sessions ──────────────────────────────────────────────────────────
-
-const chatSessions = new Map<string, { history: LLMMessage[]; phoneNumber?: string }>();
+// ─── Chat Sessions (MongoDB-backed) ─────────────────────────────────────────
 
 // ─── SMS Rate Limiter ───────────────────────────────────────────────────────
 
@@ -329,8 +330,32 @@ app.get('/chat/stream', (req, res) => {
   addChatClient(sessionId, res);
 });
 
+// GET /chat/history — Load previous chat messages
+app.get('/chat/history', async (req, res) => {
+  const sessionId = req.query.sessionId as string;
+  if (!sessionId) {
+    res.status(400).json({ error: 'Missing sessionId' });
+    return;
+  }
+
+  try {
+    const session = await ChatSessionModel.findOne({ session_id: sessionId }).lean();
+    if (!session) {
+      res.json({ messages: [], role: null });
+      return;
+    }
+    res.json({
+      messages: session.messages,
+      role: session.role,
+      phoneNumber: session.phone_number,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /chat — Send chat message
-app.post('/chat', (req, res) => {
+app.post('/chat', async (req, res) => {
   const { message, role, sessionId, phoneNumber } = req.body as ChatRequest;
 
   if (!message || !role || !sessionId) {
@@ -338,34 +363,91 @@ app.post('/chat', (req, res) => {
     return;
   }
 
-  // Get or create session
-  let session = chatSessions.get(sessionId);
+  const now = new Date().toISOString();
+
+  // Get or create session from MongoDB
+  let session = await ChatSessionModel.findOne({ session_id: sessionId });
   if (!session) {
-    session = { history: [], phoneNumber };
-    chatSessions.set(sessionId, session);
-  } else if (phoneNumber && !session.phoneNumber) {
-    session.phoneNumber = phoneNumber;
+    session = await ChatSessionModel.create({
+      session_id: sessionId,
+      role,
+      phone_number: phoneNumber,
+      messages: [],
+      history: [],
+      created_at: now,
+      updated_at: now,
+    });
+  } else if (phoneNumber && !session.phone_number) {
+    session.phone_number = phoneNumber;
   }
+
+  // Persist user message
+  const userMsg = {
+    id: `msg_${Date.now()}`,
+    role: 'user' as const,
+    content: message,
+    timestamp: now,
+  };
+  session.messages.push(userMsg);
 
   // Wrap user message in untrusted-input tags (same defense as SMS path)
   session.history.push({ role: 'user', content: wrapUntrustedInput(message) });
+  session.updated_at = now;
+  await session.save();
 
   // Run unified loop in background (streaming via SSE)
-  const normalizedPhone = session.phoneNumber ? normalizePhone(session.phoneNumber) : undefined;
+  const normalizedPhone = session.phone_number ? normalizePhone(session.phone_number) : undefined;
   const tools = role === 'interested_person' ? CHAT_BOOKING_TOOLS : NO_TOOLS;
 
-  runLoop(session.history, {
+  // Use a mutable reference to the history array so runLoop can push to it
+  const history = session.history as import('@apm/shared').LLMMessage[];
+
+  runLoop(history, {
     label: `CHAT:${sessionId}`,
     eventName: `chat-${sessionId}`,
     maxIterations: AGENT_CONFIG.CHAT_MAX_ITERATIONS,
     tools,
-    systemPrompt: buildSystemPrompt(role, normalizedPhone || session.phoneNumber),
+    systemPrompt: buildSystemPrompt(role, normalizedPhone || session.phone_number),
     emitter: createChatEmitter(sessionId),
+  }).then(async () => {
+    // After loop completes, persist updated history and add assistant message
+    const assistantBlocks = history.filter(m => m.role === 'assistant');
+    const lastAssistant = assistantBlocks[assistantBlocks.length - 1];
+    if (lastAssistant) {
+      const text = typeof lastAssistant.content === 'string'
+        ? lastAssistant.content
+        : (lastAssistant.content as any[])
+            .filter((b: any) => b.type === 'text')
+            .map((b: any) => b.text)
+            .join('');
+      if (text) {
+        session!.messages.push({
+          id: `msg_${Date.now()}`,
+          role: 'assistant',
+          content: text,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
+    session!.history = history;
+    session!.updated_at = new Date().toISOString();
+    await session!.save();
   }).catch((err) => {
     console.error('[CHAT] Error:', err);
   });
 
   res.json({ status: 'ok' });
+});
+
+// GET /events/history — Fetch all persisted SSE events for dashboard hydration
+app.get('/events/history', async (_req, res) => {
+  try {
+    const events = await SSEEventLogModel.find().sort({ seq: 1 }).lean();
+    res.json({ events: events.map(e => e.data) });
+  } catch (err: any) {
+    console.error('[HISTORY] Error fetching events:', err);
+    res.status(500).json({ error: err.message || 'Failed to fetch history' });
+  }
 });
 
 // GET /events/stream — SSE endpoint
@@ -400,11 +482,11 @@ app.post('/reset', async (_req, res) => {
     smsLastSeen.clear();
 
     // Clear chat sessions
-    chatSessions.clear();
     clearAllChatClients();
 
-    // Re-seed database
+    // Re-seed database and reset owner settings
     await seed();
+    await loadOwnerSettings();
 
     // Notify connected clients
     emitSSE('reset', { message: 'Server state reset' });
@@ -496,12 +578,56 @@ if (fs.existsSync(dashboardDist)) {
   });
 }
 
+// ─── Restore Scheduled Tasks ─────────────────────────────────────────────────
+
+async function restoreScheduledTasks(): Promise<void> {
+  const pendingTasks = await ScheduledTaskModel.find({ status: 'pending' }).lean();
+  if (pendingTasks.length === 0) return;
+
+  let restored = 0;
+  for (const task of pendingTasks) {
+    const remaining = new Date(task.fires_at).getTime() - Date.now();
+    const delayMs = Math.max(remaining, 1000); // At least 1s if overdue
+
+    registerTask(task.task_id, delayMs, async () => {
+      console.log(`[SCHEDULER] Restored task ${task.task_id} fired: ${task.description}`);
+      await ScheduledTaskModel.updateOne({ task_id: task.task_id }, { status: 'fired' });
+
+      enqueueEvent(
+        {
+          type: 'scheduled_task',
+          source: 'self-scheduled',
+          name: `Self-Scheduled: ${task.description.substring(0, 60)}`,
+          payload: {
+            task_id: task.task_id,
+            task_description: task.description,
+          },
+        },
+        DEMO_LANE_ID,
+        'demo',
+      );
+    });
+    restored++;
+  }
+  console.log(`[SCHEDULER] Restored ${restored} pending tasks`);
+}
+
 // ─── Startup ────────────────────────────────────────────────────────────────
 
 async function start(): Promise<void> {
   try {
     await connectDB();
-    await seed();
+
+    // Only seed if database is empty (preserves data across restarts)
+    if (await shouldSeed()) {
+      await seed();
+    } else {
+      console.log('[DB] Database already seeded, skipping seed');
+      await initSSESequence();
+      await laneManager.loadAll();
+      await loadOwnerSettings();
+      await restoreScheduledTasks();
+    }
 
     app.listen(PORT, () => {
       console.log(`\n========================================`);

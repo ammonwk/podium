@@ -78,7 +78,7 @@ export const PROVIDERS = {
   },
   CEREBRAS: {
     provider: 'cerebras' as const,
-    model: 'zai-glm-4.7',
+    model: 'gpt-oss-120b',
   },
 };
 

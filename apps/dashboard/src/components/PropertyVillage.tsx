@@ -10,10 +10,11 @@ import { MiniCalendar } from './MiniCalendar';
 interface Props {
   properties: PropertyState[];
   onPropertyClick: (property: PropertyState) => void;
+  compact?: boolean;
 }
 
 /* ─── Module-scoped state (avoids React re-renders) ───────────────────── */
-const globalPointer = { x: 0, y: 0 };
+const globalPointer = { x: 0, y: 0, over: false };
 const activeHouse = { idx: -1 };
 // Canvas rect — cached on mount, updated on pointer enter
 let canvasRect: DOMRect | null = null;
@@ -58,7 +59,7 @@ function smoothstep(e0: number, e1: number, x: number): number {
 /* ═══════════════════════════════════════════════════════════════════════ */
 /*  PropertyVillage                                                        */
 /* ═══════════════════════════════════════════════════════════════════════ */
-export const PropertyVillage: React.FC<Props> = ({ properties, onPropertyClick }) => {
+export const PropertyVillage: React.FC<Props> = ({ properties, onPropertyClick, compact = false }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Track mouse globally so proximity works even when pointer is outside the canvas
@@ -75,9 +76,16 @@ export const PropertyVillage: React.FC<Props> = ({ properties, onPropertyClick }
   return (
   <div
     ref={containerRef}
-    style={containerStyle}
+    style={{
+      ...containerStyle,
+      height: '340px',
+    }}
     onPointerEnter={() => {
       if (containerRef.current) canvasRect = containerRef.current.getBoundingClientRect();
+      globalPointer.over = true;
+    }}
+    onPointerLeave={() => {
+      globalPointer.over = false;
     }}
   >
     <Canvas
@@ -87,7 +95,7 @@ export const PropertyVillage: React.FC<Props> = ({ properties, onPropertyClick }
       gl={{ antialias: true, alpha: true }}
       onCreated={({ gl, camera }) => {
         gl.toneMapping = THREE.NoToneMapping;
-        camera.lookAt(0, 1.2, 0);
+        camera.lookAt(0, 0.3, 0);
       }}
       style={{ background: 'transparent', overflow: 'visible' }}
     >
@@ -97,7 +105,12 @@ export const PropertyVillage: React.FC<Props> = ({ properties, onPropertyClick }
   );
 };
 
-const containerStyle: React.CSSProperties = { width: '100%', height: '340px', flexShrink: 0, overflow: 'visible' };
+const containerStyle: React.CSSProperties = {
+  width: '100%',
+  flexShrink: 0,
+  overflow: 'visible',
+  transition: 'height 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+};
 
 /* ═══════════════════════════════════════════════════════════════════════ */
 /*  Scene                                                                  */
@@ -227,8 +240,8 @@ function House({ property, idx, pos, pal, gm, onClick }: HouseProps) {
       dy = -(((globalPointer.y - canvasRect.top) / canvasRect.height) * 2 - 1) - ndcAnchor.current.y;
     }
 
-    // Hover lift — pixel radius, aspect-correct
-    const isNear = distPx < 120;
+    // Hover lift — pixel radius, aspect-correct; require pointer over the village
+    const isNear = globalPointer.over && distPx < 120;
     const liftTarget = isNear ? 0.25 : 0;
     liftY.current += (liftTarget - liftY.current) * Math.min(1, dt * 8);
     group.current.position.y = liftY.current;

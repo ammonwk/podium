@@ -7,6 +7,10 @@ import type {
   WorkOrder,
   Decision,
   ScheduledTask,
+  SSEEventType,
+  LLMMessage,
+  ChatRole,
+  ChatMessage,
 } from '@apm/shared';
 import { PROPERTY_IDS, VENDOR_IDS, PHONE_NUMBERS, BOOKING_TIMES } from '@apm/shared';
 
@@ -94,6 +98,68 @@ const scheduledTaskSchema = new Schema<ScheduledTask>({
   status: { type: String, enum: ['pending', 'fired', 'cancelled'], required: true },
 });
 
+// ─── Persistence Schemas ──────────────────────────────────────────────────────
+
+export interface SSEEventLogRecord {
+  seq: number;
+  type: SSEEventType;
+  timestamp: string;
+  data: Record<string, unknown>;
+}
+
+const sseEventLogSchema = new Schema<SSEEventLogRecord>({
+  seq: { type: Number, required: true, unique: true },
+  type: { type: String, required: true },
+  timestamp: { type: String, required: true },
+  data: { type: Schema.Types.Mixed, required: true },
+});
+
+export interface ConversationRecord {
+  lane_id: string;
+  lane_type: 'demo' | 'caller';
+  history: LLMMessage[];
+  created_at: string;
+  updated_at: string;
+}
+
+const conversationSchema = new Schema<ConversationRecord>({
+  lane_id: { type: String, required: true, unique: true },
+  lane_type: { type: String, enum: ['demo', 'caller'], required: true },
+  history: { type: Schema.Types.Mixed, required: true },
+  created_at: { type: String, required: true },
+  updated_at: { type: String, required: true },
+});
+
+export interface ChatSessionRecord {
+  session_id: string;
+  role: ChatRole;
+  phone_number?: string;
+  messages: ChatMessage[];
+  history: LLMMessage[];
+  created_at: string;
+  updated_at: string;
+}
+
+const chatSessionSchema = new Schema<ChatSessionRecord>({
+  session_id: { type: String, required: true, unique: true },
+  role: { type: String, enum: ['property_owner', 'current_occupant', 'interested_person'], required: true },
+  phone_number: { type: String },
+  messages: { type: Schema.Types.Mixed, required: true },
+  history: { type: Schema.Types.Mixed, required: true },
+  created_at: { type: String, required: true },
+  updated_at: { type: String, required: true },
+});
+
+export interface OwnerSettingsRecord {
+  name: string;
+  phone: string;
+}
+
+const ownerSettingsSchema = new Schema<OwnerSettingsRecord>({
+  name: { type: String, required: true },
+  phone: { type: String, required: true },
+});
+
 // ─── Models ───────────────────────────────────────────────────────────────────
 
 export const PropertyModel: Model<Property> =
@@ -113,13 +179,26 @@ export const ScheduledTaskModel: Model<ScheduledTask> =
   mongoose.models.ScheduledTask ||
   mongoose.model<ScheduledTask>('ScheduledTask', scheduledTaskSchema);
 
+export const SSEEventLogModel: Model<SSEEventLogRecord> =
+  mongoose.models.SSEEventLog ||
+  mongoose.model<SSEEventLogRecord>('SSEEventLog', sseEventLogSchema);
+export const ConversationModel: Model<ConversationRecord> =
+  mongoose.models.Conversation ||
+  mongoose.model<ConversationRecord>('Conversation', conversationSchema);
+export const ChatSessionModel: Model<ChatSessionRecord> =
+  mongoose.models.ChatSession ||
+  mongoose.model<ChatSessionRecord>('ChatSession', chatSessionSchema);
+export const OwnerSettingsModel: Model<OwnerSettingsRecord> =
+  mongoose.models.OwnerSettings ||
+  mongoose.model<OwnerSettingsRecord>('OwnerSettings', ownerSettingsSchema);
+
 // ─── Connection ───────────────────────────────────────────────────────────────
 
 export async function connectDB(): Promise<void> {
   const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/apm';
   console.log(`[DB] Connecting to MongoDB at ${uri}`);
-  await mongoose.connect(uri);
-  console.log('[DB] Connected to MongoDB');
+  await mongoose.connect(uri, { maxPoolSize: 50 });
+  console.log('[DB] Connected to MongoDB (pool: 50)');
 }
 
 // ─── Seed ─────────────────────────────────────────────────────────────────────
@@ -156,6 +235,10 @@ export async function seed(): Promise<void> {
     WorkOrderModel.deleteMany({}),
     DecisionModel.deleteMany({}),
     ScheduledTaskModel.deleteMany({}),
+    SSEEventLogModel.deleteMany({}),
+    ConversationModel.deleteMany({}),
+    ChatSessionModel.deleteMany({}),
+    OwnerSettingsModel.deleteMany({}),
   ]);
 
   // ── Properties ────────────────────────────────────────────────────────────
@@ -364,5 +447,32 @@ export async function seed(): Promise<void> {
     },
   ]);
 
+  // Reset SSE sequence counter
+  resetSSESequence();
+
   console.log('[DB] Seed complete');
+}
+
+// Returns true if the database is empty and needs seeding
+export async function shouldSeed(): Promise<boolean> {
+  const count = await PropertyModel.countDocuments();
+  return count === 0;
+}
+
+// ─── SSE Sequence Counter ─────────────────────────────────────────────────────
+
+let sseSeq = 0;
+
+export function nextSSESeq(): number {
+  return ++sseSeq;
+}
+
+export function resetSSESequence(): void {
+  sseSeq = 0;
+}
+
+export async function initSSESequence(): Promise<void> {
+  const last = await SSEEventLogModel.findOne().sort({ seq: -1 }).lean();
+  sseSeq = last ? last.seq : 0;
+  console.log(`[DB] SSE sequence initialized at ${sseSeq}`);
 }

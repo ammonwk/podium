@@ -3,20 +3,41 @@ import type { LaneContext } from '../shared/sse.js';
 import { emitChatSSE } from '../shared/chat-sse.js';
 import type { LoopEmitter } from './types.js';
 
+const THINKING_FLUSH_MS = 80; // batch thinking deltas — feels real-time, 10x fewer writes
+
 export function createDashboardEmitter(laneContext?: LaneContext): LoopEmitter {
   let currentEventName = '';
+  let thinkingBuffer = '';
+  let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function flushThinking() {
+    if (thinkingBuffer) {
+      emitSSE('thinking', { text: thinkingBuffer, event_name: currentEventName }, laneContext);
+      thinkingBuffer = '';
+    }
+    flushTimer = null;
+  }
+
+  function bufferThinking(text: string) {
+    thinkingBuffer += text;
+    if (!flushTimer) {
+      flushTimer = setTimeout(flushThinking, THINKING_FLUSH_MS);
+    }
+  }
 
   return {
     onThinkingDelta(text) {
-      emitSSE('thinking', { text, event_name: currentEventName }, laneContext);
+      bufferThinking(text);
     },
     onTextDelta(text) {
-      emitSSE('thinking', { text, event_name: currentEventName }, laneContext);
+      bufferThinking(text);
     },
     onToolCall(toolName, input, result, _isError) {
+      flushThinking(); // flush any pending text before tool card appears
       emitSSE('tool_call', { tool_name: toolName, input, result, event_name: currentEventName }, laneContext);
     },
     onError(message) {
+      flushThinking();
       emitSSE('error', { message }, laneContext);
     },
     onStart(eventName, source) {
@@ -28,6 +49,7 @@ export function createDashboardEmitter(laneContext?: LaneContext): LoopEmitter {
       }, laneContext);
     },
     onDone() {
+      flushThinking(); // flush remaining text before done event
       emitSSE('event_done', { event_name: currentEventName }, laneContext);
     },
   };
