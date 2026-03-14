@@ -12,6 +12,7 @@ import { ActivityFeed } from './components/ActivityFeed';
 import { FinancialBar } from './components/FinancialBar';
 import { DrilldownModal } from './components/DrilldownModal';
 import type { DrilldownData } from './components/DrilldownModal';
+import { ChatWidget } from './components/ChatWidget';
 
 const App: React.FC = () => {
   const state = useSSE();
@@ -158,6 +159,9 @@ const App: React.FC = () => {
 
       {/* ─── Drilldown Modal ──────────────────────────────────────────── */}
       <DrilldownModal data={drilldown} onClose={closeDrilldown} />
+
+      {/* ─── Chat Widget ──────────────────────────────────────────────── */}
+      <ChatWidget />
     </div>
   );
 };

@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import type { IncomingEvent, DemoEvent, SurgeWebhookPayload } from '@apm/shared';
+import type { IncomingEvent, DemoEvent, SurgeWebhookPayload, ChatRequest, LLMMessage } from '@apm/shared';
 import { AGENT_CONFIG, PROVIDERS } from '@apm/shared';
 import { connectDB, seed } from './shared/db.js';
 import { addClient, emitSSE } from './shared/sse.js';
@@ -13,7 +13,9 @@ import {
 import { cancelAll as cancelAllTasks } from './shared/scheduler.js';
 import { getProviderConfig, setProvider } from './shared/llm/client.js';
 import { runAgentLoop } from './agent/orchestrator.js';
+import { runChatLoop } from './agent/chat-orchestrator.js';
 import { formatEvent } from './agent/format-event.js';
+import { addChatClient, clearAllChatClients } from './shared/chat-sse.js';
 import { setHandleEventCallback } from './tools/schedule-task.js';
 
 // ─── Express App ──────────────────────────────────────────────────────────────
@@ -82,6 +84,10 @@ function enqueueEvent(event: IncomingEvent): void {
 setHandleEventCallback((event) => {
   enqueueEvent(event);
 });
+
+// ─── Chat Sessions ──────────────────────────────────────────────────────────
+
+const chatSessions = new Map<string, LLMMessage[]>();
 
 // ─── SMS Rate Limiter ───────────────────────────────────────────────────────
 
@@ -173,6 +179,52 @@ app.post('/surge/webhook', (req, res) => {
   res.json({ status: 'queued', event_name: event.name });
 });
 
+// GET /chat/stream — Chat SSE endpoint
+app.get('/chat/stream', (req, res) => {
+  const sessionId = req.query.sessionId as string;
+  if (!sessionId) {
+    res.status(400).json({ error: 'Missing sessionId' });
+    return;
+  }
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+
+  res.write(`data: ${JSON.stringify({ type: 'connected' })}\n\n`);
+  addChatClient(sessionId, res);
+});
+
+// POST /chat — Send chat message
+app.post('/chat', (req, res) => {
+  const { message, role, sessionId } = req.body as ChatRequest;
+
+  if (!message || !role || !sessionId) {
+    res.status(400).json({ error: 'Missing message, role, or sessionId' });
+    return;
+  }
+
+  // Get or create session history
+  let history = chatSessions.get(sessionId);
+  if (!history) {
+    history = [];
+    chatSessions.set(sessionId, history);
+  }
+
+  // Push user message
+  history.push({ role: 'user', content: message });
+
+  // Run chat loop in background (streaming via SSE)
+  runChatLoop(history, role, sessionId).catch((err) => {
+    console.error('[CHAT] Error:', err);
+  });
+
+  res.json({ status: 'ok' });
+});
+
 // GET /events/stream — SSE endpoint
 app.get('/events/stream', (req, res) => {
   res.writeHead(200, {
@@ -203,6 +255,10 @@ app.post('/reset', async (_req, res) => {
 
     // Clear SMS rate limiter
     smsLastSeen.clear();
+
+    // Clear chat sessions
+    chatSessions.clear();
+    clearAllChatClients();
 
     // Reset queue
     eventQueue = Promise.resolve();

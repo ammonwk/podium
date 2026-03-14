@@ -1,3 +1,20 @@
+// ─── Chat Types ──────────────────────────────────────────────────────────────
+
+export type ChatRole = 'property_owner' | 'current_occupant' | 'interested_person';
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+}
+
+export interface ChatRequest {
+  message: string;
+  role: ChatRole;
+  sessionId: string;
+}
+
 // ─── Database Models ─────────────────────────────────────────────────────────
 
 export interface Property {
