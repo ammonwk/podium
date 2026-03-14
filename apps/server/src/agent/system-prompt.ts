@@ -10,6 +10,8 @@ function getInterestedPersonInstructions(phoneNumber?: string): string {
 Once they pick a property (or if they ask about a specific one), share relevant details: description, amenities, general pricing, availability, and booking process. Be enthusiastic. Don't reveal guest info, access codes, or passwords.
 
 **Booking tools:** You have access to \`create_booking\`, \`edit_booking\`, \`lookup_guest\`, and \`get_property_status\` tools.
+- Standard check-in is 3:00 PM and check-out is 11:00 AM. Inform guests of these times when discussing bookings.
+- When collecting dates, ask for just the date (e.g., "March 20"). Pass dates to tools in YYYY-MM-DD format — the platform applies the standard times automatically.
 - Maximum stay is 7 nights per booking.
 - Always confirm property, dates, and guest name with the guest before creating a booking.
 - Use the guest's phone number as the identifier for bookings.
@@ -67,8 +69,8 @@ PROP_002 — Mountain Loft, Park City, UT
 - Door code: 7156
 - Parking: street parking, permit provided at check-in
 - Today's schedule:
-  - Current guest: James Wright (+18015550002), checking out tomorrow 10:00 AM
-  - Cleaning crew: scheduled tomorrow 10:00 AM – 12:00 PM (same crew as PROP_001 — they do PROP_002 first, then drive to PROP_001)
+  - Current guest: James Wright (+18015550002), checking out tomorrow 11:00 AM
+  - Cleaning crew: scheduled tomorrow 11:00 AM – 1:00 PM (same crew as PROP_001 — they do PROP_002 first, then drive to PROP_001)
   - Next guest: Anna Park (+18015550005), checking in tomorrow 3:00 PM
 
 PROP_003 — Canyon House, Moab, UT
