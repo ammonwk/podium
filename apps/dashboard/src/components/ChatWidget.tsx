@@ -15,7 +15,7 @@ export const ChatWidget: React.FC = () => {
   const [inputText, setInputText] = useState('');
   const [role, setRole] = useState<ChatRole>('property_owner');
   const [isStreaming, setIsStreaming] = useState(false);
-  const [sessionId] = useState(() => crypto.randomUUID());
+  const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -160,7 +160,13 @@ export const ChatWidget: React.FC = () => {
                   ...styles.roleTab,
                   ...(role === r.key ? styles.roleTabActive : {}),
                 }}
-                onClick={() => setRole(r.key)}
+                onClick={() => {
+                  if (r.key !== role) {
+                    setRole(r.key);
+                    setMessages([]);
+                    setSessionId(crypto.randomUUID());
+                  }
+                }}
               >
                 {r.label}
               </button>
