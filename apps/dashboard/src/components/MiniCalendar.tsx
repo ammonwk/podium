@@ -22,6 +22,7 @@ const PRICE_HOVER_COLOR = '#10B981';
 
 export const MiniCalendar: React.FC<Props> = ({ bookings, currentPrice, basePrice, maintenanceDays = [], compact = false }) => {
   const [hoveredDay, setHoveredDay] = useState<number | null>(null);
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
   const today = new Date();
   const year = today.getFullYear();
@@ -30,8 +31,8 @@ export const MiniCalendar: React.FC<Props> = ({ bookings, currentPrice, basePric
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDay = new Date(year, month, 1).getDay();
 
-  // Map each day -> booked (true/false)
-  const bookedDays = new Set<number>();
+  // Map each day -> booking (if any)
+  const dayBookingMap = new Map<number, BookingRange>();
   bookings.forEach((b) => {
     const ci = new Date(b.checkIn);
     const co = new Date(b.checkOut);
@@ -39,7 +40,7 @@ export const MiniCalendar: React.FC<Props> = ({ bookings, currentPrice, basePric
       const dayStart = new Date(year, month, d);
       const dayEnd = new Date(year, month, d + 1);
       if (ci < dayEnd && co > dayStart) {
-        bookedDays.add(d);
+        dayBookingMap.set(d, b);
       }
     }
   });
@@ -109,7 +110,7 @@ export const MiniCalendar: React.FC<Props> = ({ bookings, currentPrice, basePric
             return <div key={i} style={{ width: cellSize, height: cellHeight }} />;
           }
 
-          const isBooked = bookedDays.has(day);
+          const isBooked = dayBookingMap.has(day);
           const isMaintenance = maintenanceSet.has(day);
           const isToday = day === todayDate;
           const isHovered = hoveredDay === day;
@@ -119,6 +120,7 @@ export const MiniCalendar: React.FC<Props> = ({ bookings, currentPrice, basePric
           else if (isBooked) bgColor = BOOKED_COLOR;
           else if (isToday) bgColor = 'rgba(0,0,0,0.06)';
 
+          const isSelected = selectedDay === day;
           const hasColor = isBooked || isMaintenance;
           const dayPrice = isBooked ? basePrice : currentPrice;
           const priceStr = `$${dayPrice}`;
@@ -128,6 +130,7 @@ export const MiniCalendar: React.FC<Props> = ({ bookings, currentPrice, basePric
               key={i}
               onMouseEnter={() => setHoveredDay(day)}
               onMouseLeave={() => setHoveredDay(null)}
+              onClick={() => setSelectedDay(isSelected ? null : day)}
               style={{
                 width: cellSize,
                 height: cellHeight,
@@ -138,10 +141,12 @@ export const MiniCalendar: React.FC<Props> = ({ bookings, currentPrice, basePric
                 gap: 0,
                 backgroundColor: bgColor,
                 borderRadius: compact ? '6px' : '6px',
-                boxShadow: isToday && !hasColor
-                  ? `inset 0 0 0 1.5px ${THEME.text.accent}`
-                  : undefined,
-                cursor: 'default',
+                boxShadow: isSelected
+                  ? `inset 0 0 0 2px ${THEME.text.accent}`
+                  : isToday && !hasColor
+                    ? `inset 0 0 0 1.5px ${THEME.text.accent}`
+                    : undefined,
+                cursor: 'pointer',
                 transition: 'background-color 0.15s ease',
               }}
             >
@@ -172,6 +177,33 @@ export const MiniCalendar: React.FC<Props> = ({ bookings, currentPrice, basePric
           );
         })}
       </div>
+
+      {/* Selected-day info bar */}
+      {selectedDay !== null && (() => {
+        const booking = dayBookingMap.get(selectedDay);
+        const isMaint = maintenanceSet.has(selectedDay);
+        let label: string;
+        if (booking) {
+          const ciStr = new Date(booking.checkIn).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+          const coStr = new Date(booking.checkOut).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+          label = `${booking.guestName}  ·  ${ciStr} – ${coStr}`;
+        } else if (isMaint) {
+          label = 'Maintenance';
+        } else {
+          label = 'Available';
+        }
+        return (
+          <div style={{
+            fontSize: compact ? 12 : 11,
+            fontWeight: 500,
+            color: booking ? BOOKED_COLOR : isMaint ? REPAIR_COLOR : THEME.text.secondary,
+            textAlign: 'center',
+            padding: '4px 0',
+          }}>
+            {label}
+          </div>
+        );
+      })()}
 
     </div>
   );
