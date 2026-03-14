@@ -86,9 +86,9 @@ Builds the entire backend in one shot:
 
 | File | What it builds |
 |------|---------------|
-| `main.ts` | Express server, all routes (`/events`, `/surge/webhook`, `/events/stream`, `/reset`, `/health`, `/provider`), event queue (promise-chain serialization), SMS rate limiter |
+| `main.ts` | Express server, all routes (`/events`, `/surge/webhook`, `/events/stream`, `/reset`, `/health`, `/provider`, `/chat`), conversation routing (demo lane vs caller lanes vs web lanes), per-lane promise chains, SMS rate limiter |
 | `agent/orchestrator.ts` | `runAgentLoop()`: streaming agentic tool-use loop with 10-iteration cap, SSE emission of thinking/tool_call events, error recovery |
-| `agent/system-prompt.ts` | `buildSystemPrompt()`: the full business-state prompt from section 8, with dynamic date injection |
+| `agent/system-prompt.ts` | `buildSystemPrompt()`: queries MongoDB for current property/schedule/work order/decision state, injects into prompt template. Rebuilt on every agent loop iteration so concurrent conversations always see fresh state |
 | `agent/format-event.ts` | `formatEvent()`: DB lookup by phone, guest context enrichment, `<untrusted_input>` tagging with random hex |
 | `tools/definitions.ts` | Tool schemas for Claude (all 7 tools) |
 | `tools/send-sms.ts` | Surge API integration with phone validation |
@@ -100,7 +100,7 @@ Builds the entire backend in one shot:
 | `tools/schedule-task.ts` | setTimeout with compressed delays + 10-task cap |
 | `shared/db.ts` | Mongoose connection, all 7 models, `seed()` function with full initial data matching the system prompt |
 | `shared/sse.ts` | `emitSSE()` with multi-client support, event ID generation |
-| `shared/state.ts` | `conversationHistory` array + reset |
+| `shared/conversations.ts` | `Map<string, Conversation>` — per-lane conversation history storage, lane creation/lookup by phone number or session ID, reset |
 | `shared/scheduler.ts` | Task queue, timer tracking, cancel-all for reset |
 | `shared/llm/client.ts` | Active provider state, swap logic, `getClient()` |
 | `shared/llm/anthropic.ts` | `AnthropicClient` wrapping `@anthropic-ai/sdk` with streaming |
@@ -272,7 +272,7 @@ agentic-property-manager/
 │   │       └── shared/
 │   │           ├── db.ts             ← Mongoose connection + models + seed function
 │   │           ├── sse.ts            ← emitSSE() → multi-type SSE stream
-│   │           ├── state.ts          ← conversationHistory array
+│   │           ├── conversations.ts   ← per-lane conversation history Map, lane creation/lookup, routing
 │   │           ├── scheduler.ts      ← task queue for self-scheduled events
 │   │           └── llm/
 │   │               ├── client.ts     ← active provider state + swap logic
@@ -317,21 +317,118 @@ The loop works like this:
 6. Append the assistant response and tool results to conversation history. Loop back to step 1.
 7. Cap at 10 iterations. If the agent is still calling tools after 10 rounds, return a fallback message.
 
-The event handler in `main.ts` is simple: `formatEvent()` enriches the raw event, appends it to the shared `conversationHistory` array, runs the agent loop, and appends the response.
+The event handler in `main.ts` routes the event to the correct conversation lane (demo, caller, or web), calls `formatEvent()` to enrich it, appends to that lane's conversation history, runs the agent loop (with `buildSystemPrompt()` querying MongoDB for fresh state on every iteration), and appends the response to the same lane's history.
 
 **Streaming matters for the demo.** Using `.stream()` instead of `.create()` means reasoning text appears character by character on the dashboard while Claude thinks. Without it, judges stare at a blank screen for 5–10 seconds per event.
 
 **If the active provider's API is down during the demo,** try switching to the other provider via the dashboard toggle. If both are down, the dashboard shows "Agent is thinking..." and we switch to the backup video. Never debug on stage.
 
-### Event queue (concurrency)
+### Concurrency model — parallel conversations, shared state
 
-The current code has a race condition if not handled. If a judge texts the Surge number while a scripted event is processing, both calls to `handleEvent()` run concurrently. Both read and write to the same `conversationHistory` array. The interleaving will corrupt message order, and the agent will see garbled context.
+The old plan serialized all events through a single promise chain. That breaks when 5 judges text simultaneously — they'd queue behind each other and behind scripted events. The new model: **every conversation runs its own agent loop concurrently. They share state through the database, not through conversation history.**
 
-Fix: serialize event processing with a promise chain. Each incoming event (whether from the demo runner, a Surge webhook, or a self-scheduled task) gets enqueued. If the agent is already processing an event, the new one waits. A judge's SMS sits in the queue until the current event finishes. The delay is invisible to the judge because they don't know when the agent "should" respond.
+#### Two conversation lanes
 
-Build this from the start. It's a few lines and prevents a whole class of demo-breaking bugs.
+**1. Demo lane** — one conversation history shared across all scripted demo events (Events 1–7) and self-scheduled tasks. Events in this lane are fired sequentially by the demo runner (with 3s pauses between them), so the cascade naturally works: Event 2 sees Event 1's tool calls in the conversation history. Self-scheduled tasks append to this same history when they fire.
 
-**Queue visibility:** When a self-scheduled task fires while the agent is busy processing another event, the queue should immediately emit an SSE `event_queued` event (with the task description and source) *before* the event starts processing. This lets the dashboard show "Plumber follow-up queued..." in the timeline while Event 4 is still running. Judges see self-scheduled events arriving in real time even before the agent gets to them — it looks alive.
+**2. Caller lanes** — one conversation history per external phone number (judge SMS) or per web session. When a judge texts, the system looks up their phone number. If a conversation already exists for that number, the new message appends to that conversation's history. If not, a new conversation is created. Each caller lane runs its own agent loop independently and concurrently with everything else.
+
+```
+Demo runner fires Event 1 ──→ demo lane agent loop (conversationHistory_demo)
+Demo runner fires Event 2 ──→ same demo lane (waits for Event 1 to finish)
+                                        ↕ reads/writes MongoDB
+Judge A texts ──────────────→ caller lane A agent loop (conversationHistory_A)
+                                        ↕ reads/writes MongoDB
+Judge B texts ──────────────→ caller lane B agent loop (conversationHistory_B)
+                                        ↕ reads/writes MongoDB
+Judge A texts again ────────→ same caller lane A (appends, waits for prior response)
+```
+
+Within a single lane, messages serialize (one at a time) — you can't have two responses generating for the same caller simultaneously, that would produce nonsense. Across lanes, everything is fully concurrent.
+
+#### Dynamic system prompt replaces shared history
+
+This is the key architectural change. Instead of one giant conversation history that every event reads from, **the system prompt is rebuilt from the database at the start of every agent loop iteration.**
+
+`buildSystemPrompt()` queries MongoDB for:
+- Current property state (prices, ratings, active work orders, schedules)
+- Active bookings with guest details
+- Vendor roster and availability
+- Recent decisions from the `decisions` collection (last N, giving the agent awareness of what's happened today)
+- Pending scheduled tasks
+
+This means: when the demo lane's Event 2 dispatches a plumber and writes a work order to MongoDB, Judge A's concurrent agent loop picks it up on its next iteration because `buildSystemPrompt()` re-queries. No shared conversation history needed — the database IS the shared context.
+
+**Recent decisions injection:** The `decisions` collection (written by `log_decision`) acts as a cross-conversation awareness mechanism. When `buildSystemPrompt()` pulls the last 20 decisions, any agent loop — demo or caller — sees a summary of what's happened across all conversations. A judge asking "any issues with your properties?" gets an agent that knows about the plumbing dispatch even though it's in a different conversation lane.
+
+```
+Every agent loop iteration:
+  1. buildSystemPrompt()  ← queries MongoDB NOW, gets current prices/schedules/work orders/recent decisions
+  2. llmClient.stream(systemPrompt, thisLaneConversationHistory, tools)
+  3. Tool calls execute against MongoDB (atomic writes)
+  4. Append results to this lane's conversation history
+  5. If stop_reason === tool_use, go to 1 (system prompt refreshes with any changes from step 3)
+```
+
+The system prompt refreshing at step 5 is critical: if two concurrent agent loops both adjust a price, the second loop's next iteration sees the first loop's price change in the refreshed system prompt before deciding what to do next.
+
+#### Conversation storage
+
+```typescript
+// In-memory store, keyed by conversation ID
+const conversations = new Map<string, {
+  id: string;
+  type: 'demo' | 'caller' | 'web';
+  phoneNumber?: string;       // for SMS lanes
+  sessionId?: string;         // for web lanes
+  history: LLMMessage[];
+  createdAt: Date;
+  lastActivity: Date;
+}>();
+
+// Demo lane is pre-created at startup with id 'demo'
+// Caller lanes are created on first message from a phone number
+// Web lanes are created on first message from a session
+```
+
+Reset (`POST /reset`) clears all conversations and re-seeds the database. The demo lane is re-created empty.
+
+#### Routing logic in main.ts
+
+```
+POST /events (demo runner)        → always routes to demo lane
+POST /surge/webhook (inbound SMS) → routes to caller lane by phone number (creates if new)
+POST /chat (web interface)        → routes to web lane by session ID (creates if new)
+Scheduled task fires              → always routes to demo lane
+```
+
+Within each lane, a simple per-lane promise chain ensures messages from the same caller don't overlap. Across lanes, no coordination needed — they're fully independent async operations.
+
+#### Handling two judges asking about the same property simultaneously
+
+This is the sharp edge. Judge A asks "what's available in Park City?" and Judge B asks "how much is the cottage?" at the same time. Both agent loops read the same property state from MongoDB. Both might try to act on it.
+
+**For read-only interactions (most judge queries):** No conflict. Both get the current state, both respond accurately.
+
+**For write interactions (e.g., the demo lane adjusts a price while a judge is asking about that property):**
+- Tool implementations use Mongoose's `findOneAndUpdate` with version checks. If the underlying state changed between the agent's read (via system prompt) and its write (via tool call), the tool returns an error describing the conflict.
+- The agent sees the error, the system prompt refreshes on the next iteration with the new state, and the agent adapts.
+- In practice this is rare during the demo — judges mostly ask questions, they don't trigger write operations.
+
+**For the demo cascade specifically:** The demo runner still fires events sequentially and waits for completion. Event 2 always sees Event 1's state changes because Event 1 is fully committed to the DB before Event 2 starts. The cascade integrity is guaranteed by the demo runner's sequential firing, not by a global lock.
+
+#### SSE implications
+
+Each conversation lane emits its own SSE events. The dashboard needs to handle this:
+- Demo lane events render in the main Stage (center column) as before
+- Caller/web lane events could render in a separate "Live Interactions" section or in the Activity Feed
+- All tool calls from all lanes appear in the Activity Feed (right column) so judges see the full picture
+
+The SSE `event_start` payload now includes a `conversation_id` and `conversation_type` field so the dashboard can route events to the right UI section.
+
+#### Queue visibility for self-scheduled tasks
+
+When a self-scheduled task fires while the demo lane's agent is busy processing another event, the queue emits an SSE `event_queued` event immediately (with the task description and source) before the event starts processing. This lets the dashboard show "Plumber follow-up queued..." in the timeline while Event 4 is still running. Judges see self-scheduled events arriving in real time even before the agent gets to them.
 
 ---
 
@@ -477,7 +574,7 @@ The property owner is David Reyes (+18015550000). Escalate to David when the sit
 
 **Eng 2 owns this file.** The first 2 hours of the hackathon should be spent testing this prompt against the event sequence via direct API calls, tuning the language until Claude consistently makes the right cascading decisions.
 
-**Static vs. dynamic state:** The system prompt above has hardcoded property data. When `adjust_price` changes PROP_001 from $195 to $280, the system prompt still says $195 on the next loop iteration. For the demo this works because the agent sees its own prior price change in the conversation history (principle 1). But if Eng 2 sees the agent using stale prices during testing, the fix is to make `buildSystemPrompt()` query MongoDB for current property/schedule state instead of returning a hardcoded string. This adds ~20 lines but eliminates "agent forgot it changed the price" bugs. Try static first, switch to dynamic at Checkpoint 2 if needed.
+**Dynamic state (required by concurrency model):** `buildSystemPrompt()` queries MongoDB on every call — it does not use hardcoded property data. This is required because multiple conversation lanes run concurrently and share state through the database. When the demo lane's `adjust_price` changes PROP_001 from $195 to $280, a judge's concurrent agent loop sees $280 on its next iteration because `buildSystemPrompt()` re-queries. The prompt template above is the *structure* — the actual values (prices, schedules, work orders, vendor statuses) are filled from MongoDB at call time. The function also appends the last 20 entries from the `decisions` collection so every agent loop (in any lane) has awareness of recent actions across all conversations.
 
 ---
 
