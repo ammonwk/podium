@@ -318,7 +318,7 @@ function House({ property, idx, pos, pal, gm, onClick }: HouseProps) {
             transition: 'opacity 0.2s ease-out, transform 0.2s ease-out',
           }}>
             <div style={lbl.calendarCard}>
-              <MiniCalendar bookings={property.bookings} compact />
+              <MiniCalendar bookings={property.bookings} currentPrice={property.current_price} basePrice={property.base_price} compact />
             </div>
           </div>
         </Html>
