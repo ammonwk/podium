@@ -328,7 +328,7 @@ export const PropertyDetail: React.FC<Props> = ({ property, activities, onBack }
         {/* Calendar Card */}
         <div style={styles.card}>
           <div style={styles.cardLabel}>Monthly Calendar</div>
-          <MiniCalendar bookings={property.bookings} />
+          <MiniCalendar bookings={property.bookings} currentPrice={property.current_price} basePrice={property.base_price} />
         </div>
       </div>
 

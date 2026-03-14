@@ -198,6 +198,7 @@ function isBookedSoon(property: PropertyState): boolean {
 
 function House({ property, idx, pos, pal, gm, onClick }: HouseProps) {
   const group = useRef<THREE.Group>(null!);
+  const calGroup = useRef<THREE.Group>(null!);
   const liftY = useRef(0);
   const shake = useRef(0);
   const entrance = useRef(0);
@@ -272,11 +273,22 @@ function House({ property, idx, pos, pal, gm, onClick }: HouseProps) {
     // Emergency shake
     if (emergency) {
       shake.current += dt * 6;
-      group.current.position.x = Math.sin(shake.current * 4) * 0.04;
-      group.current.rotation.z = Math.sin(shake.current * 3) * 0.012;
+      const shakeX = Math.sin(shake.current * 4) * 0.04;
+      const shakeZ = Math.sin(shake.current * 3) * 0.012;
+      group.current.position.x = shakeX;
+      group.current.rotation.z = shakeZ;
+      // Counter-shake the calendar group so it stays stable
+      if (calGroup.current) {
+        calGroup.current.position.x = -shakeX;
+        calGroup.current.rotation.z = -shakeZ;
+      }
     } else {
       group.current.position.x = 0;
       group.current.rotation.z = 0;
+      if (calGroup.current) {
+        calGroup.current.position.x = 0;
+        calGroup.current.rotation.z = 0;
+      }
     }
   });
 
@@ -323,18 +335,20 @@ function House({ property, idx, pos, pal, gm, onClick }: HouseProps) {
           </div>
         </Html>
 
-        {/* Hover calendar — positioned to the right of the house */}
-        <Html position={[2.2, 0.6, 1.0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
-          <div style={{
-            opacity: hovered ? 1 : 0,
-            transform: hovered ? 'translateX(0)' : 'translateX(-8px)',
-            transition: 'opacity 0.2s ease-out, transform 0.2s ease-out',
-          }}>
-            <div style={lbl.calendarCard}>
-              <MiniCalendar bookings={property.bookings} compact />
+        {/* Hover calendar — counter-shake group keeps it stable */}
+        <group ref={calGroup}>
+          <Html position={[2.2, 0.6, 1.0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
+            <div style={{
+              opacity: hovered ? 1 : 0,
+              transform: hovered ? 'translateX(0)' : 'translateX(-8px)',
+              transition: 'opacity 0.2s ease-out, transform 0.2s ease-out',
+            }}>
+              <div style={lbl.calendarCard}>
+                <MiniCalendar bookings={property.bookings} currentPrice={property.current_price} basePrice={property.base_price} compact />
+              </div>
             </div>
-          </div>
-        </Html>
+          </Html>
+        </group>
       </group>
     </group>
   );
