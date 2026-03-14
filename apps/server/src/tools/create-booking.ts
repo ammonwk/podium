@@ -1,5 +1,6 @@
 import type { CreateBookingInput, CreateBookingResult } from '@apm/shared';
 import { PropertyModel, BookingModel, ScheduleEventModel } from '../shared/db.js';
+import { emitSSE } from '../shared/sse.js';
 import { normalizePhone } from '../shared/phone-utils.js';
 import { normalizeCheckIn, normalizeCheckOut } from '../shared/booking-dates.js';
 
@@ -81,6 +82,23 @@ export async function executeCreateBooking(
   ]);
 
   const totalEstimate = nights * property.current_price;
+
+  emitSSE('tool_call', {
+    tool_name: 'create_booking',
+    input,
+    result: {
+      booking_id: bookingId,
+      property_name: property.name,
+      guest_name,
+      guest_phone,
+      check_in,
+      check_out,
+      nights,
+      nightly_rate: property.current_price,
+      total_estimate: totalEstimate,
+    },
+    event_name: `booking_${bookingId}`,
+  });
 
   return {
     booking_id: bookingId,
