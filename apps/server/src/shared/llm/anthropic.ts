@@ -28,15 +28,18 @@ export class AnthropicClient implements LLMClient {
       { thinking: string; signature: string }
     >();
 
-    const stream = this.client.messages.stream({
+    const params: any = {
       model: this.model,
       max_tokens: 16000,
       system,
       thinking: { type: 'adaptive' },
       output_config: { effort: 'medium' },
       messages: messages as Anthropic.MessageParam[],
-      tools: tools as Anthropic.Tool[],
-    } as any);
+    };
+    if (tools.length > 0) {
+      params.tools = tools as Anthropic.Tool[];
+    }
+    const stream = this.client.messages.stream(params);
 
     for await (const event of stream) {
       if (event.type === 'content_block_start') {
