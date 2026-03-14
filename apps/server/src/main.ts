@@ -85,7 +85,7 @@ app.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (re
       console.log(`[STRIPE] Payment completed for booking ${bookingId}`);
       await BookingModel.updateOne(
         { id: bookingId },
-        { payment_status: 'paid' },
+        { payment_status: 'paid', status: 'upcoming' },
       );
 
       // Look up the booking to get guest details for the AI event
@@ -100,7 +100,7 @@ app.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (re
           source: 'system',
           name: `Payment Received: ${guestName} (${bookingId})`,
           payload: {
-            message: `Payment confirmed for booking ${bookingId}. Guest ${guestName} (${guestPhone}) has paid $${((session.amount_total || 0) / 100).toFixed(2)} for property ${propertyId}. Send them a confirmation message acknowledging their payment and confirming their reservation details.`,
+            message: `Payment confirmed for booking ${bookingId}. Guest ${guestName} (${guestPhone}) has paid $${((session.amount_total || 0) / 100).toFixed(2)} for property ${propertyId}. The booking is now confirmed. Send them a confirmation message acknowledging their payment and include their check-in details: door code, WiFi, parking info, check-in/check-out times.`,
           },
         },
         guestPhone || DEMO_LANE_ID,

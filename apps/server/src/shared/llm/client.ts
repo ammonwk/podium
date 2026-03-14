@@ -11,7 +11,7 @@ const OPENROUTER_FALLBACKS: Record<
   { model: string; providerOrder?: string[] }
 > = {
   anthropic: { model: 'anthropic/claude-sonnet-4' },
-  cerebras: { model: 'cerebras/gpt-oss-120b', providerOrder: ['cerebras'] },
+  cerebras: { model: 'cerebras/zai-glm-4.7', providerOrder: ['cerebras'] },
 };
 
 let activeClient: LLMClient | null = null;

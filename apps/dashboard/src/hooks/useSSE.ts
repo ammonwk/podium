@@ -218,7 +218,7 @@ function createInitialState(): DashboardState {
         const saved = localStorage.getItem("providerConfig");
         if (saved) return JSON.parse(saved);
       } catch {}
-      return { provider: "cerebras", model: "gpt-oss-120b" };
+      return { provider: "cerebras", model: "zai-glm-4.7" };
     })(),
     demoEventIndex: 0,
   };
@@ -937,7 +937,7 @@ export function useSSE(): DashboardState & {
       // Toggle between Anthropic and Cerebras
       const nextConfig =
         state.providerConfig.provider === "anthropic"
-          ? { provider: "cerebras", model: "gpt-oss-120b" }
+          ? { provider: "cerebras", model: "zai-glm-4.7" }
           : { provider: "anthropic", model: "claude-opus-4-6" };
 
       const resp = await fetch(`${serverUrl}/api/provider`, {

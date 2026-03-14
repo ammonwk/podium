@@ -405,7 +405,7 @@ export const toolDefinitions: LLMToolDefinition[] = [
   {
     name: 'send_payment_link',
     description:
-      'Generate a Stripe payment link for an existing booking and return the URL. The guest can click it to pay for their stay. Returns the payment URL and total amount. Will not create a duplicate link if one already exists for the booking.',
+      'Generate a Stripe payment link for an existing booking, automatically send it to the guest via SMS, and return the URL. The guest can click it to pay for their stay. Returns the payment URL and total amount. You do NOT need to send a separate SMS with the link — it is sent automatically. Will not create a duplicate link if one already exists for the booking.',
     input_schema: {
       type: 'object',
       required: ['booking_id'],

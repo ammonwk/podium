@@ -220,7 +220,7 @@ Both Anthropic (Claude Sonnet / Opus) and Cerebras are available as inference ba
 
 **How to switch:**
 - Dashboard: a toggle in the top-right corner next to the Run Demo / Reset buttons. Shows the current provider name and model. Click to cycle.
-- API: `POST /provider` with `{ "provider": "anthropic", "model": "claude-sonnet-4-5-20251001" }` or `{ "provider": "cerebras", "model": "gpt-oss-120b" }`. Returns the new active config.
+- API: `POST /provider` with `{ "provider": "anthropic", "model": "claude-sonnet-4-5-20251001" }` or `{ "provider": "cerebras", "model": "zai-glm-4.7" }`. Returns the new active config.
 - `GET /provider` returns the current provider and model.
 
 **Implementation:** Eng 1 builds a thin `LLMClient` interface in the shared types package with one method: `stream(system, messages, tools)` that returns a common stream shape (text chunks + final message with tool calls). Two implementations: `AnthropicClient` wrapping `@anthropic-ai/sdk` and `CerebrasClient` wrapping the Cerebras SDK. The orchestrator calls `llmClient.stream()` instead of the Anthropic SDK directly. Switching providers just swaps which client instance the orchestrator uses.

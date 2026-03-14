@@ -41,7 +41,7 @@ export interface Booking {
   guest_phone: string;
   check_in: string;
   check_out: string;
-  status: 'active' | 'upcoming' | 'completed';
+  status: 'active' | 'upcoming' | 'pending_payment' | 'completed';
   payment_status?: 'pending' | 'paid' | 'none';
   payment_link?: string;
 }
@@ -203,6 +203,7 @@ export interface SendPaymentLinkResult {
   amount_cents: number;
   total_display: string;
   status: string;
+  sms_sent?: boolean;
 }
 
 export interface ReportMaintenanceIssueInput {

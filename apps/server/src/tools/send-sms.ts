@@ -15,7 +15,7 @@ async function resolveRecipient(
   // Check active/upcoming bookings
   const booking = await BookingModel.findOne({
     guest_phone: phone,
-    status: { $in: ['active', 'upcoming'] },
+    status: { $in: ['active', 'upcoming', 'pending_payment'] },
   }).lean();
   if (booking) {
     return { name: booking.guest_name, type: 'guest' };

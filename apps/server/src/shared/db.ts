@@ -39,7 +39,7 @@ const bookingSchema = new Schema<Booking>({
   guest_phone: { type: String, required: true },
   check_in: { type: String, required: true },
   check_out: { type: String, required: true },
-  status: { type: String, enum: ['active', 'upcoming', 'completed'], required: true },
+  status: { type: String, enum: ['active', 'upcoming', 'pending_payment', 'completed'], required: true },
   payment_status: { type: String, enum: ['pending', 'paid', 'none'], default: 'none' },
   payment_link: { type: String },
 });

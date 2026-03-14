@@ -37,7 +37,7 @@ async function formatGuestMessage(event: IncomingEvent): Promise<string> {
   // Look up the phone number in bookings
   const booking = await BookingModel.findOne({
     guest_phone: phone,
-    status: { $in: ['active', 'upcoming'] },
+    status: { $in: ['active', 'upcoming', 'pending_payment'] },
   }).lean();
 
   let contextHeader: string;
@@ -48,7 +48,9 @@ async function formatGuestMessage(event: IncomingEvent): Promise<string> {
     }).lean();
     const propertyName = property ? property.name : booking.property_id;
     const statusLabel =
-      booking.status === 'active' ? 'currently staying' : 'upcoming reservation';
+      booking.status === 'active' ? 'currently staying' :
+      booking.status === 'pending_payment' ? 'booking pending payment' :
+      'upcoming reservation';
 
     contextHeader =
       `[INBOUND SMS from ${booking.guest_name} (${phone}) — ${statusLabel} at ${propertyName}]\n` +

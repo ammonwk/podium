@@ -31,7 +31,7 @@ export async function executeLookupGuest(
 
   const bookings = await BookingModel.find({
     guest_phone: normalized,
-    status: { $in: ['active', 'upcoming'] },
+    status: { $in: ['active', 'upcoming', 'pending_payment'] },
   }).lean();
 
   if (bookings.length === 0) {

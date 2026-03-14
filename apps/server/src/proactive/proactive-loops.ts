@@ -78,7 +78,7 @@ async function runMorningRoutine(enqueueFn: EnqueueFn): Promise<void> {
   }).lean();
 
   const allBookings = await BookingModel.find({
-    status: { $in: ['active', 'upcoming'] },
+    status: { $in: ['active', 'upcoming', 'pending_payment'] },
   }).lean();
 
   let briefing = `MORNING BRIEFING for ${today}:\n\n`;

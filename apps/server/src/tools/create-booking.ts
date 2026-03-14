@@ -38,7 +38,7 @@ export async function executeCreateBooking(
     // Check for overlapping bookings on same property
     const overlap = await BookingModel.findOne({
       property_id,
-      status: { $in: ['active', 'upcoming'] },
+      status: { $in: ['active', 'upcoming', 'pending_payment'] },
       check_in: { $lt: check_out },
       check_out: { $gt: check_in },
     }).lean();
@@ -60,7 +60,7 @@ export async function executeCreateBooking(
       guest_phone,
       check_in,
       check_out,
-      status: 'upcoming',
+      status: 'pending_payment',
     });
 
     // Create schedule events for checkin and checkout

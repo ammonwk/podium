@@ -15,7 +15,7 @@ export async function executeEditBooking(
   // Find booking(s) by phone
   const query: Record<string, unknown> = {
     guest_phone,
-    status: { $in: ['active', 'upcoming'] },
+    status: { $in: ['active', 'upcoming', 'pending_payment'] },
   };
   if (property_id) {
     query.property_id = property_id;
@@ -70,7 +70,7 @@ export async function executeEditBooking(
     // Check for overlapping bookings (excluding this booking)
     const overlap = await BookingModel.findOne({
       property_id: targetPropertyId,
-      status: { $in: ['active', 'upcoming'] },
+      status: { $in: ['active', 'upcoming', 'pending_payment'] },
       _id: { $ne: booking._id },
       check_in: { $lt: finalCheckOut },
       check_out: { $gt: finalCheckIn },

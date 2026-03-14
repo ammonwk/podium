@@ -1,6 +1,7 @@
 import Stripe from 'stripe';
 import type { SendPaymentLinkInput, SendPaymentLinkResult } from '@apm/shared';
 import { BookingModel, PropertyModel } from '../shared/db.js';
+import { executeSendSms } from './send-sms.js';
 
 function getStripe(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY;
@@ -32,6 +33,7 @@ export async function executeSendPaymentLink(
     (checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24),
   );
   const totalCents = nights * property.current_price * 100;
+  const totalDisplay = `$${(totalCents / 100).toFixed(2)}`;
 
   // Check if a payment link was already created for this booking
   if (booking.payment_link && booking.payment_status === 'pending') {
@@ -39,7 +41,7 @@ export async function executeSendPaymentLink(
       booking_id,
       payment_url: booking.payment_link,
       amount_cents: totalCents,
-      total_display: `$${(totalCents / 100).toFixed(2)}`,
+      total_display: totalDisplay,
       status: 'already_created',
     };
   }
@@ -87,11 +89,22 @@ export async function executeSendPaymentLink(
     { payment_status: 'pending', payment_link: session.url },
   );
 
+  // Auto-send the payment link to the guest via SMS
+  const guestName = booking.guest_name.split(' ')[0]; // First name
+  const smsBody = `Hey ${guestName}, here's your payment link for ${property.name} (${nights} night${nights > 1 ? 's' : ''}, ${totalDisplay}): ${session.url}`;
+  try {
+    await executeSendSms({ to: booking.guest_phone, body: smsBody });
+    console.log(`[TOOL:send_payment_link] Auto-sent payment SMS to ${booking.guest_phone}`);
+  } catch (err: any) {
+    console.error(`[TOOL:send_payment_link] Failed to auto-send payment SMS:`, err.message);
+  }
+
   return {
     booking_id,
     payment_url: session.url!,
     amount_cents: totalCents,
-    total_display: `$${(totalCents / 100).toFixed(2)}`,
+    total_display: totalDisplay,
     status: 'link_created',
+    sms_sent: true,
   };
 }

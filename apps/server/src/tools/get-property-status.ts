@@ -32,7 +32,7 @@ export async function executeGetPropertyStatus(
     // Active/upcoming bookings sorted by check_in
     const bookings = await BookingModel.find({
       property_id: prop.id,
-      status: { $in: ['active', 'upcoming'] },
+      status: { $in: ['active', 'upcoming', 'pending_payment'] },
     })
       .sort({ check_in: 1 })
       .lean();
