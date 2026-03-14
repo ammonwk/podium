@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { THEME, DEMO_EVENTS } from '@apm/shared';
 import { RADIUS, ANIMATION, SHADOW } from '../styles/theme';
 
@@ -6,6 +6,7 @@ interface Props {
   demoPhase: 'idle' | 'running' | 'self-managing';
   demoEventIndex: number;
   onRunDemo: () => void;
+  onEmptyDay: () => void;
   onResetDemo: () => void;
 }
 
@@ -34,14 +35,30 @@ export const DemoControls: React.FC<Props> = ({
   demoPhase,
   demoEventIndex,
   onRunDemo,
+  onEmptyDay,
   onResetDemo,
 }) => {
   const [runHovered, setRunHovered] = useState(false);
   const [resetHovered, setResetHovered] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [hoveredOption, setHoveredOption] = useState<string | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const isIdle = demoPhase === 'idle';
   const isRunning = demoPhase === 'running';
   const isSelfManaging = demoPhase === 'self-managing';
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [dropdownOpen]);
 
   const getRunButtonStyle = (): React.CSSProperties => {
     if (isSelfManaging) {
@@ -74,6 +91,22 @@ export const DemoControls: React.FC<Props> = ({
     };
   };
 
+  const handleButtonClick = () => {
+    if (isIdle) {
+      setDropdownOpen((prev) => !prev);
+    }
+  };
+
+  const handleSelectDemoEvents = () => {
+    setDropdownOpen(false);
+    onRunDemo();
+  };
+
+  const handleSelectEmptyDay = () => {
+    setDropdownOpen(false);
+    onEmptyDay();
+  };
+
   return (
     <div style={styles.container}>
       {isSelfManaging && (
@@ -85,24 +118,62 @@ export const DemoControls: React.FC<Props> = ({
 
       {isRunning && <ProgressBar currentIndex={demoEventIndex} />}
 
-      <button
-        style={getRunButtonStyle()}
-        onClick={isIdle ? onRunDemo : undefined}
-        onMouseEnter={() => setRunHovered(true)}
-        onMouseLeave={() => setRunHovered(false)}
-        disabled={!isIdle}
-      >
-        {isIdle && 'See AI in Action'}
-        {isRunning && (
-          <span style={styles.runningContent}>
-            <span style={styles.spinner} />
-            Running...
-          </span>
+      <div style={styles.dropdownWrapper} ref={dropdownRef}>
+        <button
+          style={getRunButtonStyle()}
+          onClick={handleButtonClick}
+          onMouseEnter={() => setRunHovered(true)}
+          onMouseLeave={() => setRunHovered(false)}
+          disabled={!isIdle}
+        >
+          {isIdle && (
+            <span style={styles.buttonContent}>
+              See AI in Action
+              <svg width="10" height="6" viewBox="0 0 10 6" fill="none" style={{ marginLeft: '6px' }}>
+                <path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+          )}
+          {isRunning && (
+            <span style={styles.runningContent}>
+              <span style={styles.spinner} />
+              Running...
+            </span>
+          )}
+          {isSelfManaging && (
+            <span style={{ color: THEME.status.normal }}>&#10003; Complete</span>
+          )}
+        </button>
+
+        {dropdownOpen && (
+          <div style={styles.dropdownMenu}>
+            <button
+              style={{
+                ...styles.dropdownItem,
+                backgroundColor: hoveredOption === 'demo' ? THEME.bg.cardHover : 'transparent',
+              }}
+              onClick={handleSelectDemoEvents}
+              onMouseEnter={() => setHoveredOption('demo')}
+              onMouseLeave={() => setHoveredOption(null)}
+            >
+              <span style={styles.dropdownItemTitle}>Demo Events</span>
+              <span style={styles.dropdownItemDesc}>Fire {TOTAL_EVENTS} scripted events</span>
+            </button>
+            <button
+              style={{
+                ...styles.dropdownItem,
+                backgroundColor: hoveredOption === 'empty' ? THEME.bg.cardHover : 'transparent',
+              }}
+              onClick={handleSelectEmptyDay}
+              onMouseEnter={() => setHoveredOption('empty')}
+              onMouseLeave={() => setHoveredOption(null)}
+            >
+              <span style={styles.dropdownItemTitle}>Empty Day</span>
+              <span style={styles.dropdownItemDesc}>AI handles live events</span>
+            </button>
+          </div>
         )}
-        {isSelfManaging && (
-          <span style={{ color: THEME.status.normal }}>&#10003; Complete</span>
-        )}
-      </button>
+      </div>
 
       <button
         style={{
@@ -126,6 +197,9 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '10px',
     flexShrink: 0,
   },
+  dropdownWrapper: {
+    position: 'relative',
+  },
   runButton: {
     padding: '10px 24px',
     borderRadius: RADIUS.full,
@@ -138,6 +212,10 @@ const styles: Record<string, React.CSSProperties> = {
     whiteSpace: 'nowrap',
     cursor: 'pointer',
     boxShadow: SHADOW.sm,
+  },
+  buttonContent: {
+    display: 'inline-flex',
+    alignItems: 'center',
   },
   runningContent: {
     display: 'inline-flex',
@@ -165,6 +243,39 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     transition: `all ${ANIMATION.fast} ${ANIMATION.easeOut}`,
     whiteSpace: 'nowrap',
+  },
+  dropdownMenu: {
+    position: 'absolute',
+    top: 'calc(100% + 6px)',
+    right: 0,
+    minWidth: '200px',
+    backgroundColor: THEME.bg.card,
+    border: `1px solid ${THEME.bg.border}`,
+    borderRadius: RADIUS.md,
+    boxShadow: SHADOW.lg,
+    zIndex: 100,
+    overflow: 'hidden',
+  },
+  dropdownItem: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'flex-start',
+    width: '100%',
+    padding: '10px 14px',
+    border: 'none',
+    cursor: 'pointer',
+    fontFamily: THEME.font.sans,
+    transition: `background-color ${ANIMATION.fast} ${ANIMATION.easeOut}`,
+  },
+  dropdownItemTitle: {
+    fontSize: '13px',
+    fontWeight: 600,
+    color: THEME.text.primary,
+  },
+  dropdownItemDesc: {
+    fontSize: '11px',
+    color: THEME.text.muted,
+    marginTop: '2px',
   },
   progressContainer: {
     display: 'flex',

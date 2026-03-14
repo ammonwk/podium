@@ -193,6 +193,7 @@ const App: React.FC = () => {
               demoPhase={state.demoPhase}
               demoEventIndex={state.demoEventIndex}
               onRunDemo={state.runDemo}
+              onEmptyDay={state.runEmptyDay}
               onResetDemo={state.resetDemo}
             />
           </div>

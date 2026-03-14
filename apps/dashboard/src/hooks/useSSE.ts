@@ -601,9 +601,11 @@ function getServerUrl(): string {
 
 export function useSSE(): DashboardState & {
   runDemo: () => void;
+  runEmptyDay: () => void;
   resetDemo: () => void;
   switchProvider: () => void;
   selectEvent: (index: number) => void;
+  clearError: () => void;
 } {
   const [state, setState] = useState<DashboardState>(createInitialState);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -776,7 +778,7 @@ export function useSSE(): DashboardState & {
   const runDemo = useCallback(async () => {
     setState((prev) => ({ ...prev, demoPhase: "running", demoEventIndex: 0 }));
     const serverUrl = getServerUrl();
-    const BURST_DELAY_MS = 250; // stagger events by 250ms for a rapid burst
+    const BURST_DELAY_MS = 1000; // stagger events by 1s for video recording
 
     // Fire all events rapidly — each goes to its own lane via phone number,
     // so they process concurrently on the server
@@ -838,6 +840,10 @@ export function useSSE(): DashboardState & {
     setState((prev) => ({ ...prev, demoPhase: "self-managing" }));
   }, []);
 
+  const runEmptyDay = useCallback(() => {
+    setState((prev) => ({ ...prev, demoPhase: "self-managing" }));
+  }, []);
+
   const resetDemo = useCallback(async () => {
     const serverUrl = getServerUrl();
     try {
@@ -887,6 +893,7 @@ export function useSSE(): DashboardState & {
   return {
     ...state,
     runDemo,
+    runEmptyDay,
     resetDemo,
     switchProvider,
     selectEvent,

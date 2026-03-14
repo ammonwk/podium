@@ -5,7 +5,8 @@
       "Bash(curl:*)",
       "Bash(cd:*)",
       "Bash(git merge:*)",
-      "Bash(git fetch:*)"
+      "Bash(git fetch:*)",
+      "Bash(wc:*)"
     ]
   }
 }
