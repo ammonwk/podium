@@ -23,22 +23,41 @@ export async function executeAdjustPrice(
     );
   }
 
+  // Apply weekend/weekday modifier relative to base price
+  const today = new Date();
+  const dayOfWeek = today.getDay(); // 0=Sun, 5=Fri, 6=Sat
+  const isWeekend = dayOfWeek === 5 || dayOfWeek === 6;
+  let adjustedPrice = new_price;
+  if (isWeekend) {
+    // Ensure at least a 15% premium above base on weekends
+    const weekendFloor = Math.round(property.base_price * 1.15);
+    if (adjustedPrice < weekendFloor) {
+      adjustedPrice = weekendFloor;
+    }
+  } else {
+    // Weekdays: cap at base price unless there's a surge reason
+    const weekdayCeiling = property.base_price;
+    if (adjustedPrice > weekdayCeiling && new_price <= property.base_price) {
+      adjustedPrice = weekdayCeiling;
+    }
+  }
+
   const previousPrice = property.current_price;
   const percentChange =
-    (((new_price - previousPrice) / previousPrice) * 100).toFixed(1) + '%';
+    (((adjustedPrice - previousPrice) / previousPrice) * 100).toFixed(1) + '%';
 
   // Update in DB
-  await PropertyModel.updateOne({ id: property_id }, { current_price: new_price });
+  await PropertyModel.updateOne({ id: property_id }, { current_price: adjustedPrice });
 
   console.log(
-    `[TOOL:adjust_price] ${property.name}: $${previousPrice} → $${new_price} (${percentChange}) — ${reason}`,
+    `[TOOL:adjust_price] ${property.name}: $${previousPrice} → $${adjustedPrice} (${percentChange}) — ${reason}${adjustedPrice !== new_price ? ` [weekend/weekday adjusted from $${new_price}]` : ''}`,
   );
 
   const result: AdjustPriceResult = {
     property_id,
     property_name: property.name,
     previous_price: previousPrice,
-    new_price,
+    new_price: adjustedPrice,
     percent_change: percentChange,
   };
 
