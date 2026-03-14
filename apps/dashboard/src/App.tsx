@@ -9,7 +9,7 @@ import { PropertyVillage } from './components/PropertyVillage';
 import { PropertyDetail } from './components/PropertyDetail';
 import { DemoControls } from './components/DemoControls';
 import { ProviderToggle } from './components/ProviderToggle';
-import { Stage } from './components/Stage';
+import { OperationsQueue } from './components/OperationsQueue';
 import { FinancialBar } from './components/FinancialBar';
 import { DrilldownModal } from './components/DrilldownModal';
 import type { DrilldownData } from './components/DrilldownModal';
@@ -107,13 +107,17 @@ const App: React.FC = () => {
     ? state.properties.find(p => p.id === selectedPropertyId) || null
     : null;
 
-  // AI status text
+  // AI status text — now lane-aware
+  const activeCount = state.events.filter(e => e.status === 'active').length;
+  const doneCount = state.events.filter(e => e.status === 'done').length;
   const aiStatusText = state.isProcessing
-    ? `Handling: ${state.events[state.activeEventIndex]?.name || 'event'}...`
+    ? activeCount > 1
+      ? `Handling ${activeCount} conversations...`
+      : `Handling: ${state.events[state.activeEventIndex]?.name || 'event'}...`
     : state.demoPhase === 'self-managing'
     ? 'AI is self-managing your properties'
     : state.events.length > 0
-    ? `${state.events.filter(e => e.status === 'done').length} events handled`
+    ? `${doneCount} conversation${doneCount !== 1 ? 's' : ''} handled`
     : 'Watching 3 properties';
 
   return (
@@ -182,16 +186,14 @@ const App: React.FC = () => {
                 onPropertyClick={openPropertyView}
               />
 
-              {/* Full-width AI Feed (center stage) */}
+              {/* Full-width AI Feed (operations queue) */}
               <div style={styles.aiFeedContainer}>
-                <Stage
+                <OperationsQueue
                   events={state.events}
-                  activeEventIndex={state.activeEventIndex}
                   isProcessing={state.isProcessing}
                   upcomingTasks={state.upcomingTasks}
                   onToolCardClick={openToolCallDrilldown}
                   onEventClick={openEventDrilldown}
-                  onSelectEvent={state.selectEvent}
                 />
               </div>
             </>
@@ -327,7 +329,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     overflow: 'hidden',
     padding: '0 24px',
-    marginTop: '24px',
+    marginTop: '56px',
   },
 
   // Error

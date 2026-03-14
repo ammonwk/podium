@@ -1,10 +1,11 @@
-import React, { useRef, useMemo, useCallback } from 'react';
+import React, { useRef, useMemo, useCallback, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import type { ThreeEvent } from '@react-three/fiber';
 import { Html, ContactShadows, Float, Sparkles } from '@react-three/drei';
 import * as THREE from 'three';
 import { THEME } from '@apm/shared';
 import type { PropertyState } from '../hooks/useSSE';
+import { MiniCalendar } from './MiniCalendar';
 
 interface Props {
   properties: PropertyState[];
@@ -30,6 +31,11 @@ const STATUS_ROOF: Record<string, string> = {
 };
 
 const RIM_COLOR = '#F5E6D0';
+
+const WARM_GLOW = {
+  glass: '#FFD580',
+  light: '#FFE0A0',
+};
 
 /* ─── Toon gradient ────────────────────────────────────────────────────── */
 function useGradientMap() {
@@ -166,6 +172,17 @@ interface HouseProps {
   onClick: () => void;
 }
 
+/* ─── Check if property is booked now or within 48h ────────────────── */
+function isBookedSoon(property: PropertyState): boolean {
+  const now = Date.now();
+  const h48 = 48 * 60 * 60 * 1000;
+  return property.bookings.some(b => {
+    const checkIn = new Date(b.checkIn).getTime();
+    const checkOut = new Date(b.checkOut).getTime();
+    return checkIn <= now + h48 && checkOut >= now;
+  });
+}
+
 function House({ property, idx, pos, pal, gm, onClick }: HouseProps) {
   const group = useRef<THREE.Group>(null!);
   const liftY = useRef(0);
@@ -175,10 +192,12 @@ function House({ property, idx, pos, pal, gm, onClick }: HouseProps) {
   const prlxY = useRef(0);
   const ndcAnchor = useRef<{ x: number; y: number } | null>(null);
   const wasNear = useRef(false);
+  const [hovered, setHovered] = useState(false);
 
   const emergency = property.status === 'emergency';
   const roofCol = STATUS_ROOF[property.status] ?? pal.roof;
   const Variant = VARIANTS[idx % VARIANTS.length];
+  const lit = isBookedSoon(property);
 
   useFrame((state, dt) => {
     if (!group.current) return;
@@ -214,13 +233,15 @@ function House({ property, idx, pos, pal, gm, onClick }: HouseProps) {
     liftY.current += (liftTarget - liftY.current) * Math.min(1, dt * 8);
     group.current.position.y = liftY.current;
 
-    // Cursor
+    // Cursor + hover state (only update React state on change)
     if (isNear && !wasNear.current) {
       activeHouse.idx = idx;
       document.body.style.cursor = 'pointer';
+      setHovered(true);
     } else if (!isNear && wasNear.current && activeHouse.idx === idx) {
       activeHouse.idx = -1;
       document.body.style.cursor = 'auto';
+      setHovered(false);
     }
     wasNear.current = isNear;
 
@@ -253,13 +274,14 @@ function House({ property, idx, pos, pal, gm, onClick }: HouseProps) {
     <group position={pos}>
       <group ref={group} scale={0} onClick={onClk}>
         <Float speed={1.2 + idx * 0.3} rotationIntensity={0.05} floatIntensity={0.15} floatingRange={[-0.03, 0.03]}>
-          <Variant pal={pal} gm={gm} emergency={emergency} roofCol={roofCol} />
+          <Variant pal={pal} gm={gm} emergency={emergency} roofCol={roofCol} lit={lit} />
         </Float>
 
         {emergency && (
           <Sparkles count={15} size={2} speed={0.3} scale={[2.5, 2, 2]} color="#F87171" opacity={0.35} noise={0.8} />
         )}
 
+        {/* Property info label */}
         <Html position={[0, -1.1, 1.6]} center zIndexRange={[1, 0]} style={{ pointerEvents: 'none', userSelect: 'none', overflow: 'visible' }}>
           <div style={lbl.wrap}>
             <div style={lbl.name}>{property.name}</div>
@@ -287,6 +309,19 @@ function House({ property, idx, pos, pal, gm, onClick }: HouseProps) {
             )}
           </div>
         </Html>
+
+        {/* Hover calendar — positioned to the right of the house */}
+        <Html position={[2.2, 0.6, 1.0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
+          <div style={{
+            opacity: hovered ? 1 : 0,
+            transform: hovered ? 'translateX(0)' : 'translateX(-8px)',
+            transition: 'opacity 0.2s ease-out, transform 0.2s ease-out',
+          }}>
+            <div style={lbl.calendarCard}>
+              <MiniCalendar bookings={property.bookings} compact />
+            </div>
+          </div>
+        </Html>
       </group>
     </group>
   );
@@ -300,10 +335,11 @@ interface VariantProps {
   gm: THREE.DataTexture;
   emergency: boolean;
   roofCol: string;
+  lit: boolean;
 }
 
-function BeachModern({ pal, gm, emergency, roofCol }: VariantProps) {
-  const gc = emergency ? '#FCA5A5' : pal.glass;
+function BeachModern({ pal, gm, emergency, roofCol, lit }: VariantProps) {
+  const gc = emergency ? '#FCA5A5' : lit ? WARM_GLOW.glass : pal.glass;
   return (
     <>
       <mesh position={[0, 0.02, 0]} castShadow>
@@ -328,9 +364,10 @@ function BeachModern({ pal, gm, emergency, roofCol }: VariantProps) {
         <planeGeometry args={[0.54, 0.76]} />
         <meshToonMaterial color={pal.accent} gradientMap={gm} />
       </mesh>
-      <GlassPanel pos={[0.32, 1.35, 0.651]} size={[0.85, 0.68]} color={gc} frame={pal.base} gm={gm} flicker={emergency} />
-      <GlassPanel pos={[0.15, 0.58, 0.751]} size={[1.3, 0.35]} color={gc} frame={pal.base} gm={gm} flicker={emergency} off={0.8} />
-      <GlassPanel pos={[1.001, 0.58, 0.15]} size={[0.5, 0.35]} color={gc} frame={pal.base} gm={gm} rot={[0, Math.PI / 2, 0]} />
+      <GlassPanel pos={[0.32, 1.35, 0.651]} size={[0.85, 0.68]} color={gc} frame={pal.base} gm={gm} flicker={emergency} lit={lit} />
+      <GlassPanel pos={[0.15, 0.58, 0.751]} size={[1.3, 0.35]} color={gc} frame={pal.base} gm={gm} flicker={emergency} off={0.8} lit={lit} />
+      <GlassPanel pos={[1.001, 0.58, 0.15]} size={[0.5, 0.35]} color={gc} frame={pal.base} gm={gm} rot={[0, Math.PI / 2, 0]} lit={lit} />
+      {lit && <pointLight position={[0, 0.8, 0.2]} intensity={0.6} color={WARM_GLOW.light} distance={3} decay={2} />}
       <mesh position={[-0.65, 0.3, 0.752]}>
         <planeGeometry args={[0.3, 0.5]} />
         <meshToonMaterial color={pal.door} gradientMap={gm} />
@@ -353,8 +390,8 @@ function BeachModern({ pal, gm, emergency, roofCol }: VariantProps) {
   );
 }
 
-function ClassicCottage({ pal, gm, emergency, roofCol }: VariantProps) {
-  const gc = emergency ? '#FCA5A5' : pal.glass;
+function ClassicCottage({ pal, gm, emergency, roofCol, lit }: VariantProps) {
+  const gc = emergency ? '#FCA5A5' : lit ? WARM_GLOW.glass : pal.glass;
   const w = 1.8, h = 1.3, d = 1.5, roofH = 0.85, ovh = 0.15;
 
   const roofGeo = useMemo(() => {
@@ -383,9 +420,10 @@ function ClassicCottage({ pal, gm, emergency, roofCol }: VariantProps) {
       <mesh geometry={roofGeo} castShadow>
         <meshToonMaterial color={roofCol} gradientMap={gm} />
       </mesh>
-      <PanedWindow pos={[-w * 0.24, h * 0.6, d / 2 + 0.005]} size={[0.32, 0.36]} color={gc} frame={pal.accent} gm={gm} flicker={emergency} />
-      <PanedWindow pos={[w * 0.24, h * 0.6, d / 2 + 0.005]} size={[0.32, 0.36]} color={gc} frame={pal.accent} gm={gm} flicker={emergency} off={1.2} />
-      <PanedWindow pos={[w / 2 + 0.005, h * 0.58, 0]} size={[0.28, 0.3]} color={gc} frame={pal.accent} gm={gm} rot={[0, Math.PI / 2, 0]} />
+      <PanedWindow pos={[-w * 0.24, h * 0.6, d / 2 + 0.005]} size={[0.32, 0.36]} color={gc} frame={pal.accent} gm={gm} flicker={emergency} lit={lit} />
+      <PanedWindow pos={[w * 0.24, h * 0.6, d / 2 + 0.005]} size={[0.32, 0.36]} color={gc} frame={pal.accent} gm={gm} flicker={emergency} off={1.2} lit={lit} />
+      <PanedWindow pos={[w / 2 + 0.005, h * 0.58, 0]} size={[0.28, 0.3]} color={gc} frame={pal.accent} gm={gm} rot={[0, Math.PI / 2, 0]} lit={lit} />
+      {lit && <pointLight position={[0, 0.7, 0.2]} intensity={0.5} color={WARM_GLOW.light} distance={2.5} decay={2} />}
       <mesh position={[0, h * 0.22, d / 2 + 0.006]}>
         <planeGeometry args={[0.32, h * 0.42]} />
         <meshToonMaterial color={pal.door} gradientMap={gm} />
@@ -430,8 +468,8 @@ function ClassicCottage({ pal, gm, emergency, roofCol }: VariantProps) {
   );
 }
 
-function DesertModern({ pal, gm, emergency, roofCol }: VariantProps) {
-  const gc = emergency ? '#FCA5A5' : pal.glass;
+function DesertModern({ pal, gm, emergency, roofCol, lit }: VariantProps) {
+  const gc = emergency ? '#FCA5A5' : lit ? WARM_GLOW.glass : pal.glass;
   return (
     <>
       <mesh position={[0, 0.02, 0]} castShadow>
@@ -459,15 +497,16 @@ function DesertModern({ pal, gm, emergency, roofCol }: VariantProps) {
         <boxGeometry args={[1.3, 0.05, 1.0]} />
         <meshToonMaterial color={roofCol} gradientMap={gm} />
       </mesh>
-      <GlassPanel pos={[0.15, 0.72, 0.801]} size={[1.6, 0.5]} color={gc} frame={pal.base} gm={gm} flicker={emergency} />
+      <GlassPanel pos={[0.15, 0.72, 0.801]} size={[1.6, 0.5]} color={gc} frame={pal.base} gm={gm} flicker={emergency} lit={lit} />
       {[-0.3, 0.2, 0.7].map((x, i) => (
         <mesh key={i} position={[x, 0.72, 0.808]}>
           <planeGeometry args={[0.025, 0.52]} />
           <meshToonMaterial color={pal.base} gradientMap={gm} />
         </mesh>
       ))}
-      <GlassPanel pos={[1.101, 0.7, 0.2]} size={[0.55, 0.4]} color={gc} frame={pal.base} gm={gm} rot={[0, Math.PI / 2, 0]} />
-      <GlassPanel pos={[1.251, 0.5, -1.2]} size={[0.5, 0.45]} color={gc} frame={pal.base} gm={gm} rot={[0, Math.PI / 2, 0]} />
+      <GlassPanel pos={[1.101, 0.7, 0.2]} size={[0.55, 0.4]} color={gc} frame={pal.base} gm={gm} rot={[0, Math.PI / 2, 0]} lit={lit} />
+      <GlassPanel pos={[1.251, 0.5, -1.2]} size={[0.5, 0.45]} color={gc} frame={pal.base} gm={gm} rot={[0, Math.PI / 2, 0]} lit={lit} />
+      {lit && <pointLight position={[0, 0.7, 0.2]} intensity={0.6} color={WARM_GLOW.light} distance={3} decay={2} />}
       <mesh position={[-0.78, 0.35, 0.802]}>
         <planeGeometry args={[0.35, 0.6]} />
         <meshToonMaterial color={pal.door} gradientMap={gm} />
@@ -501,14 +540,16 @@ function RimHull({ position, args }: { position: [number, number, number]; args:
 /* ═══════════════════════════════════════════════════════════════════════ */
 /*  Windows                                                                */
 /* ═══════════════════════════════════════════════════════════════════════ */
-function GlassPanel({ pos, size, color, frame, gm, rot, flicker, off = 0 }: {
+function GlassPanel({ pos, size, color, frame, gm, rot, flicker, off = 0, lit }: {
   pos: [number, number, number]; size: [number, number]; color: string; frame: string;
-  gm: THREE.DataTexture; rot?: [number, number, number]; flicker?: boolean; off?: number;
+  gm: THREE.DataTexture; rot?: [number, number, number]; flicker?: boolean; off?: number; lit?: boolean;
 }) {
   const mat = useRef<THREE.MeshPhysicalMaterial>(null!);
   useFrame(({ clock }) => {
     if (flicker && mat.current) {
       mat.current.opacity = 0.25 + 0.25 * Math.sin(clock.elapsedTime * 5 + off);
+    } else if (lit && mat.current) {
+      mat.current.opacity = 0.7;
     }
   });
   return (
@@ -519,20 +560,32 @@ function GlassPanel({ pos, size, color, frame, gm, rot, flicker, off = 0 }: {
       </mesh>
       <mesh position={[0, 0, 0.003]}>
         <planeGeometry args={size} />
-        <meshPhysicalMaterial ref={mat} color={color} transparent opacity={0.45} roughness={0.15} metalness={0.05} side={THREE.DoubleSide} />
+        <meshPhysicalMaterial
+          ref={mat}
+          color={color}
+          transparent
+          opacity={lit ? 0.7 : 0.45}
+          roughness={0.15}
+          metalness={0.05}
+          emissive={lit ? WARM_GLOW.light : '#000000'}
+          emissiveIntensity={lit ? 0.4 : 0}
+          side={THREE.DoubleSide}
+        />
       </mesh>
     </group>
   );
 }
 
-function PanedWindow({ pos, size, color, frame, gm, rot, flicker, off = 0 }: {
+function PanedWindow({ pos, size, color, frame, gm, rot, flicker, off = 0, lit }: {
   pos: [number, number, number]; size: [number, number]; color: string; frame: string;
-  gm: THREE.DataTexture; rot?: [number, number, number]; flicker?: boolean; off?: number;
+  gm: THREE.DataTexture; rot?: [number, number, number]; flicker?: boolean; off?: number; lit?: boolean;
 }) {
   const mat = useRef<THREE.MeshToonMaterial>(null!);
   useFrame(({ clock }) => {
     if (flicker && mat.current) {
       mat.current.opacity = 0.5 + 0.5 * Math.sin(clock.elapsedTime * 5 + off);
+    } else if (lit && mat.current) {
+      mat.current.opacity = 0.85;
     }
   });
   return (
@@ -543,7 +596,15 @@ function PanedWindow({ pos, size, color, frame, gm, rot, flicker, off = 0 }: {
       </mesh>
       <mesh position={[0, 0, 0.003]}>
         <planeGeometry args={size} />
-        <meshToonMaterial ref={mat} color={color} gradientMap={gm} transparent opacity={0.7} />
+        <meshToonMaterial
+          ref={mat}
+          color={color}
+          gradientMap={gm}
+          transparent
+          opacity={lit ? 0.85 : 0.7}
+          emissive={lit ? WARM_GLOW.light : '#000000'}
+          emissiveIntensity={lit ? 0.3 : 0}
+        />
       </mesh>
       <mesh position={[0, 0, 0.006]}>
         <planeGeometry args={[size[0], 0.025]} />
@@ -631,7 +692,17 @@ function easeOutBack(t: number): number {
 
 /* ─── Label styles ────────────────────────────────────────────────────── */
 const lbl: Record<string, React.CSSProperties> = {
-  wrap: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', whiteSpace: 'nowrap', fontFamily: "'Plus Jakarta Sans','Inter',system-ui,sans-serif" },
+  wrap: {
+    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', whiteSpace: 'nowrap',
+    fontFamily: "'Plus Jakarta Sans','Inter',system-ui,sans-serif",
+    backgroundColor: 'rgba(255,255,255,0.82)',
+    backdropFilter: 'blur(10px)',
+    WebkitBackdropFilter: 'blur(10px)',
+    padding: '6px 12px',
+    borderRadius: '10px',
+    border: '1px solid rgba(0,0,0,0.06)',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+  },
   name: { fontSize: '14px', fontWeight: 700, color: THEME.text.accent, lineHeight: '1.2', textAlign: 'center' },
   loc: { fontSize: '11px', color: THEME.text.muted },
   row: { display: 'flex', alignItems: 'center', gap: '8px', marginTop: '3px' },
@@ -639,4 +710,12 @@ const lbl: Record<string, React.CSSProperties> = {
   rating: { fontSize: '12px', fontWeight: 600, color: THEME.text.secondary },
   guest: { fontSize: '11px', color: THEME.text.muted, fontWeight: 500 },
   badge: { fontSize: '10px', fontWeight: 600, padding: '2px 8px', borderRadius: '10px', marginTop: '3px', border: '1px solid' },
+  calendarCard: {
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    backdropFilter: 'blur(8px)',
+    borderRadius: '10px',
+    padding: '8px',
+    border: '1px solid rgba(0,0,0,0.08)',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+  },
 };

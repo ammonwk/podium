@@ -26,6 +26,18 @@ export const PHONE_NUMBERS = {
   LISA_KIM: '+18015550003',
   MIKE_TORRES: '+18015550004',
   ANNA_PARK: '+18015550005',
+  RACHEL_GOMEZ: '+13105550006',
+  TOM_NGUYEN: '+12125550007',
+  KAREN_PATEL: '+14155550008',
+  DEREK_BROWN: '+17205550009',
+  EMILY_RUSSO: '+15035550010',
+  JASON_LEE: '+16175550011',
+  MARIA_SANTOS: '+13125550012',
+  BEN_HARPER: '+14045550013',
+  OLIVIA_CHANG: '+12065550014',
+  CHRIS_MILLER: '+15125550015',
+  PRIYA_DESAI: '+19715550016',
+  ALEX_KOWALSKI: '+16025550017',
 } as const;
 
 // ─── Tool Names ──────────────────────────────────────────────────────────────
@@ -133,29 +145,130 @@ export const THEME = {
 // ─── Demo Events ─────────────────────────────────────────────────────────────
 
 export const DEMO_EVENTS = [
+  // ── Booking requests ──
   {
     type: 'guest_message' as const,
-    name: 'Late Checkout Request',
+    name: 'Rachel: Booking Request',
+    from: PHONE_NUMBERS.RACHEL_GOMEZ,
+    body: 'Hi! Can I book March 20-22? Two adults, no pets. Whats the rate?',
+  },
+  {
+    type: 'guest_message' as const,
+    name: 'Tom: Weekend Availability',
+    from: PHONE_NUMBERS.TOM_NGUYEN,
+    body: 'Is next weekend available? Looking for a last minute getaway',
+  },
+
+  // ── Late checkout / early checkin ──
+  {
+    type: 'guest_message' as const,
+    name: 'Sarah: Late Checkout',
     from: PHONE_NUMBERS.SARAH_CHEN,
     body: 'Hey! Any chance I could check out at 1PM instead of 11AM tomorrow?',
   },
   {
     type: 'guest_message' as const,
-    name: 'Emergency Maintenance',
+    name: 'Karen: Early Checkin',
+    from: PHONE_NUMBERS.KAREN_PATEL,
+    body: 'Our flight lands at 10am, any way we could check in early around noon? Happy to pay extra if needed',
+  },
+
+  // ── Maintenance issues ──
+  {
+    type: 'guest_message' as const,
+    name: 'James: Plumbing Emergency',
     from: PHONE_NUMBERS.JAMES_WRIGHT,
     body: 'HELP there\'s water pouring from the bathroom ceiling!!',
   },
   {
-    type: 'market_alert' as const,
-    name: 'Market Pricing Alert',
-    alert_type: 'festival_demand',
-    message: 'Park City Jazz Festival announced for this weekend. Competitor average nightly rate: $310.',
+    type: 'guest_message' as const,
+    name: 'Derek: AC Broken',
+    from: PHONE_NUMBERS.DEREK_BROWN,
+    body: 'ac isnt working and its like 90 degrees in here. can someone come look at it asap?',
   },
   {
     type: 'guest_message' as const,
-    name: 'Guest Complaint',
+    name: 'Emily: Wifi Down',
+    from: PHONE_NUMBERS.EMILY_RUSSO,
+    body: 'The wifi keeps dropping every few minutes. I\'m trying to work remotely and its really frustrating',
+  },
+  {
+    type: 'guest_message' as const,
+    name: 'Jason: Lockout',
+    from: PHONE_NUMBERS.JASON_LEE,
+    body: 'Im locked out!!! The keypad code isnt working and its raining. Please help',
+  },
+
+  // ── Amenity questions ──
+  {
+    type: 'guest_message' as const,
+    name: 'Maria: Pet Policy',
+    from: PHONE_NUMBERS.MARIA_SANTOS,
+    body: 'Do you allow dogs? I have a 30lb golden retriever, very well behaved',
+  },
+  {
+    type: 'guest_message' as const,
+    name: 'Ben: Parking Question',
+    from: PHONE_NUMBERS.BEN_HARPER,
+    body: 'Is there parking at the property? We\'re driving up from Phoenix and have a full size SUV',
+  },
+  {
+    type: 'guest_message' as const,
+    name: 'Olivia: Wifi Password',
+    from: PHONE_NUMBERS.OLIVIA_CHANG,
+    body: 'Whats the wifi password? I cant find it anywhere in the welcome book',
+  },
+
+  // ── Complaints ──
+  {
+    type: 'guest_message' as const,
+    name: 'Lisa: Cleanliness Complaint',
     from: PHONE_NUMBERS.LISA_KIM,
     body: 'The place could honestly be a bit cleaner.',
+  },
+  {
+    type: 'guest_message' as const,
+    name: 'Chris: Noisy Neighbors',
+    from: PHONE_NUMBERS.CHRIS_MILLER,
+    body: 'The neighbors have been blasting music since 11pm. Its almost 1am now and we cant sleep. This is unacceptable',
+  },
+  {
+    type: 'guest_message' as const,
+    name: 'Priya: Pool Issue',
+    from: PHONE_NUMBERS.PRIYA_DESAI,
+    body: 'The pool isnt heated at all, its freezing cold. The listing said heated pool...',
+  },
+
+  // ── Compliment / rebook ──
+  {
+    type: 'guest_message' as const,
+    name: 'Anna: Rebook Request',
+    from: PHONE_NUMBERS.ANNA_PARK,
+    body: 'Amazing place!! We absolutely loved it. Can we rebook for the first week of July?',
+  },
+
+  // ── Price inquiry ──
+  {
+    type: 'guest_message' as const,
+    name: 'Mike: Price Inquiry',
+    from: PHONE_NUMBERS.MIKE_TORRES,
+    body: 'Hey, I saw the listing at $285/night but is there a weekly discount if we stay 7 nights?',
+  },
+
+  // ── Cancellation ──
+  {
+    type: 'guest_message' as const,
+    name: 'Alex: Cancellation',
+    from: PHONE_NUMBERS.ALEX_KOWALSKI,
+    body: 'Hi, I need to cancel my reservation for next week. Family emergency came up. What is the cancellation policy?',
+  },
+
+  // ── Market alert ──
+  {
+    type: 'market_alert' as const,
+    name: 'Market: Festival Surge',
+    alert_type: 'festival_demand',
+    message: 'Park City Jazz Festival announced for this weekend. Competitor average nightly rate: $310.',
   },
 ];
 
