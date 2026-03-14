@@ -464,6 +464,35 @@ function applySSEEvent(
           });
           break;
         }
+
+        case 'create_booking': {
+          const input = p.input as Record<string, unknown>;
+          const result = p.result as Record<string, unknown>;
+          const propId = input.property_id as string;
+          newProperties = prev.properties.map(prop =>
+            prop.id === propId
+              ? {
+                  ...prop,
+                  bookings: [
+                    ...prop.bookings,
+                    {
+                      guestName: (result.guest_name as string) || (input.guest_name as string),
+                      checkIn: result.check_in as string,
+                      checkOut: result.check_out as string,
+                    },
+                  ],
+                }
+              : prop
+          );
+          newActivities.unshift({
+            id: actId,
+            type: 'schedule_change',
+            timestamp: (payload.timestamp as string) || new Date().toISOString(),
+            data: { ...input, ...result },
+            eventName: p.event_name,
+          });
+          break;
+        }
       }
 
       return {
