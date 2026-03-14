@@ -168,15 +168,23 @@ app.post('/events', (req, res) => {
 // POST /surge/webhook — Inbound SMS from Surge
 app.post('/surge/webhook', (req, res) => {
   console.log('[SURGE WEBHOOK] Raw body:', JSON.stringify(req.body, null, 2));
-  const payload = req.body as SurgeWebhookPayload;
 
-  if (!payload.from || !payload.body) {
-    res.status(400).json({ error: 'Missing from or body' });
+  // Parse Surge's nested webhook format:
+  // { data: { body, conversation: { contact: { phone_number } } } }
+  const surgeData = req.body?.data;
+  const from = surgeData?.conversation?.contact?.phone_number;
+  const body = surgeData?.body;
+
+  if (!from || !body) {
+    console.warn('[SURGE WEBHOOK] Could not extract from/body from payload');
+    res.status(400).json({ error: 'Missing from or body in webhook data' });
     return;
   }
 
+  console.log(`[SURGE WEBHOOK] Inbound SMS from ${from}: "${body}"`);
+
   // Rate limit
-  if (isRateLimited(payload.from)) {
+  if (isRateLimited(from)) {
     res.json({ status: 'rate_limited' });
     return;
   }
@@ -184,10 +192,10 @@ app.post('/surge/webhook', (req, res) => {
   const event: IncomingEvent = {
     type: 'guest_message',
     source: 'human',
-    name: `Inbound SMS from ${payload.from}`,
+    name: `Inbound SMS from ${from}`,
     payload: {
-      from: payload.from,
-      body: payload.body,
+      from,
+      body,
     },
   };
 
