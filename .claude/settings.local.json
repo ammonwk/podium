@@ -4,7 +4,8 @@
       "WebFetch(domain:docs.surge.app)",
       "Bash(curl:*)",
       "Bash(cd:*)",
-      "Bash(git merge:*)"
+      "Bash(git merge:*)",
+      "Bash(git fetch:*)"
     ]
   }
 }
