@@ -12,10 +12,10 @@ export const ANIMATION = {
 } as const;
 
 export const RADIUS = {
-  sm: '6px',
-  md: '10px',
-  lg: '12px',
-  xl: '16px',
+  sm: '8px',
+  md: '12px',
+  lg: '16px',
+  xl: '20px',
   full: '9999px',
 } as const;
 
@@ -30,14 +30,16 @@ export const SPACING = {
 } as const;
 
 export const SHADOW = {
-  sm: '0 1px 3px rgba(0,0,0,0.25)',
-  md: '0 2px 8px rgba(0,0,0,0.3)',
-  lg: '0 4px 16px rgba(0,0,0,0.4)',
-  xl: '0 8px 32px rgba(0,0,0,0.5)',
-  glow: (color: string, intensity = 0.4) =>
-    `0 0 12px rgba(${hexToRgb(color)},${intensity})`,
-  glowLg: (color: string, intensity = 0.3) =>
-    `0 0 24px rgba(${hexToRgb(color)},${intensity}), 0 0 48px rgba(${hexToRgb(color)},${intensity * 0.5})`,
+  sm: '0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06)',
+  md: '0 4px 6px rgba(0,0,0,0.04), 0 2px 4px rgba(0,0,0,0.06)',
+  lg: '0 10px 15px rgba(0,0,0,0.06), 0 4px 6px rgba(0,0,0,0.04)',
+  xl: '0 20px 25px rgba(0,0,0,0.08), 0 8px 10px rgba(0,0,0,0.04)',
+  glow: (color: string, intensity = 0.15) =>
+    `0 4px 14px rgba(${hexToRgb(color)},${intensity})`,
+  glowLg: (color: string, intensity = 0.12) =>
+    `0 8px 24px rgba(${hexToRgb(color)},${intensity}), 0 4px 12px rgba(${hexToRgb(color)},${intensity * 0.5})`,
+  house: '0 20px 40px rgba(0,0,0,0.08), 0 8px 16px rgba(0,0,0,0.04)',
+  houseHover: '0 30px 60px rgba(0,0,0,0.12), 0 12px 24px rgba(0,0,0,0.06)',
 } as const;
 
 // Helper to convert hex to rgb values

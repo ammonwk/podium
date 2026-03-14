@@ -260,8 +260,9 @@ export interface IncomingEvent {
 // ─── LLM Client Interface ───────────────────────────────────────────────────
 
 export interface LLMStreamEvent {
-  type: 'text' | 'tool_use_start' | 'tool_use_done' | 'done';
+  type: 'text' | 'thinking_delta' | 'thinking_done' | 'tool_use_start' | 'tool_use_done' | 'done';
   text?: string;
+  thinking_block?: { thinking: string; signature: string };
   tool_call?: {
     id: string;
     name: string;
@@ -277,6 +278,7 @@ export interface LLMMessage {
 
 export type LLMContentBlock =
   | { type: 'text'; text: string }
+  | { type: 'thinking'; thinking: string; signature: string }
   | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
   | { type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean };
 

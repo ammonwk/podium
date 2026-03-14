@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { THEME } from '@apm/shared';
-import { RADIUS, ANIMATION } from '../styles/theme';
+import { RADIUS, ANIMATION, SHADOW } from '../styles/theme';
 import type { ActivityItem } from '../hooks/useSSE';
 
 interface Props {
@@ -22,7 +22,7 @@ export const ActivityFeed: React.FC<Props> = ({ activities, onActivityClick }) =
     <div style={styles.container}>
       {/* Header */}
       <div style={styles.header}>
-        <div style={styles.headerTitle}>Activity</div>
+        <div style={styles.headerTitle}>Activity Log</div>
         {activities.length > 0 && (
           <div style={styles.headerCount}>{activities.length}</div>
         )}
@@ -92,7 +92,7 @@ function renderActivity(activity: ActivityItem): React.ReactNode {
     case 'decision':
       return <DecisionActivity data={activity.data} />;
     default:
-      return <div style={{ fontSize: '12px', color: THEME.text.muted }}>Unknown activity</div>;
+      return <div style={{ fontSize: '14px', color: THEME.text.muted }}>Unknown activity</div>;
   }
 }
 
@@ -138,7 +138,7 @@ const PriceChangeActivity: React.FC<{ data: Record<string, unknown> }> = ({ data
 
   return (
     <div style={styles.accentRow}>
-      <div style={{ ...styles.accentBar, backgroundColor: '#22c55e' }} />
+      <div style={{ ...styles.accentBar, backgroundColor: THEME.status.normal }} />
       <div style={styles.accentContent}>
         <div style={styles.activityPrimary}>
           {propertyName}
@@ -164,13 +164,13 @@ const WorkOrderActivity: React.FC<{ data: Record<string, unknown> }> = ({ data }
   const severityColors: Record<string, string> = {
     emergency: THEME.status.emergency,
     high: '#f97316',
-    medium: '#eab308',
-    low: '#9ca3af',
+    medium: THEME.status.attention,
+    low: THEME.text.secondary,
   };
 
   return (
     <div style={styles.accentRow}>
-      <div style={{ ...styles.accentBar, backgroundColor: '#f59e0b' }} />
+      <div style={{ ...styles.accentBar, backgroundColor: THEME.status.attention }} />
       <div style={styles.accentContent}>
         <div style={styles.activityPrimary}>
           {propertyName}: {vendorName}
@@ -178,7 +178,7 @@ const WorkOrderActivity: React.FC<{ data: Record<string, unknown> }> = ({ data }
         <div style={styles.activitySecondary}>
           ${cost.toLocaleString()}
           {' · '}
-          <span style={{ color: severityColors[severity] || '#9ca3af', fontWeight: 600 }}>
+          <span style={{ color: severityColors[severity] || THEME.text.secondary, fontWeight: 600 }}>
             {severity.charAt(0).toUpperCase() + severity.slice(1)}
           </span>
         </div>
@@ -195,7 +195,7 @@ const ScheduleChangeActivity: React.FC<{ data: Record<string, unknown> }> = ({ d
 
   return (
     <div style={styles.accentRow}>
-      <div style={{ ...styles.accentBar, backgroundColor: '#8b5cf6' }} />
+      <div style={{ ...styles.accentBar, backgroundColor: THEME.accent.violet }} />
       <div style={styles.accentContent}>
         <div style={styles.activityPrimary}>
           {propertyName} {eventType}
@@ -214,13 +214,13 @@ const ScheduledTaskActivity: React.FC<{ data: Record<string, unknown> }> = ({ da
 
   return (
     <div style={styles.accentRow}>
-      <div style={{ ...styles.accentBar, backgroundColor: '#14b8a6' }} />
+      <div style={{ ...styles.accentBar, backgroundColor: THEME.status.selfInitiated }} />
       <div style={styles.accentContent}>
-        <div style={{ ...styles.activityPrimary, display: 'flex', alignItems: 'center', gap: '4px' }}>
+        <div style={{ ...styles.activityPrimary, display: 'flex', alignItems: 'center', gap: '5px' }}>
           <span>⏱</span> {description}
         </div>
         {firesIn && (
-          <div style={{ fontSize: '11px', color: '#14b8a6', fontFamily: THEME.font.mono }}>
+          <div style={{ fontSize: '14px', color: THEME.status.selfInitiated, fontFamily: THEME.font.mono }}>
             in {firesIn}
           </div>
         )}
@@ -236,7 +236,7 @@ const DecisionActivity: React.FC<{ data: Record<string, unknown> }> = ({ data })
 
   return (
     <div style={styles.accentRow}>
-      <div style={{ ...styles.accentBar, backgroundColor: '#6b7280' }} />
+      <div style={{ ...styles.accentBar, backgroundColor: THEME.text.muted }} />
       <div style={styles.accentContent}>
         <div style={{ ...styles.activityPrimary, fontSize: '11px', color: THEME.text.muted, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>
           Decision · {category}
@@ -253,14 +253,15 @@ const DecisionActivity: React.FC<{ data: Record<string, unknown> }> = ({ data })
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    width: '320px',
-    flexShrink: 0,
+    flex: 1,
+    width: '100%',
     display: 'flex',
     flexDirection: 'column',
     backgroundColor: THEME.bg.card,
-    borderLeft: `1px solid ${THEME.bg.border}`,
-    borderRadius: `0 ${RADIUS.lg} ${RADIUS.lg} 0`,
+    borderRadius: RADIUS.lg,
     overflow: 'hidden',
+    boxShadow: SHADOW.sm,
+    border: `1px solid ${THEME.bg.border}`,
   },
   header: {
     display: 'flex',
@@ -271,19 +272,19 @@ const styles: Record<string, React.CSSProperties> = {
     flexShrink: 0,
   },
   headerTitle: {
-    fontSize: '13px',
+    fontSize: '14px',
     fontWeight: 700,
-    color: THEME.text.secondary,
-    textTransform: 'uppercase' as const,
-    letterSpacing: '0.08em',
+    color: THEME.text.primary,
+    letterSpacing: '0.01em',
   },
   headerCount: {
     fontSize: '12px',
-    color: THEME.text.muted,
+    color: THEME.accent.violet,
     fontFamily: THEME.font.mono,
-    backgroundColor: THEME.bg.cardHover,
-    padding: '1px 7px',
-    borderRadius: '10px',
+    fontWeight: 600,
+    backgroundColor: 'rgba(124, 58, 237, 0.08)',
+    padding: '2px 10px',
+    borderRadius: RADIUS.full,
   },
   feed: {
     flex: 1,
@@ -296,9 +297,8 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '40px 20px',
   },
   emptyText: {
-    fontSize: '13px',
+    fontSize: '15px',
     color: THEME.text.muted,
-    opacity: 0.6,
   },
   feedItem: {
     padding: '10px 14px',
@@ -311,35 +311,33 @@ const styles: Record<string, React.CSSProperties> = {
   smsContainer: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '4px',
+    gap: '5px',
   },
   smsInLabel: {
-    fontSize: '11px',
+    fontSize: '14px',
     fontWeight: 600,
-    color: THEME.text.muted,
+    color: THEME.text.secondary,
   },
   smsInBubble: {
     backgroundColor: THEME.bg.cardHover,
-    border: `1px solid ${THEME.bg.border}`,
-    borderRadius: '10px 10px 10px 2px',
-    padding: '7px 10px',
-    fontSize: '13px',
+    borderRadius: `${RADIUS.md} ${RADIUS.md} ${RADIUS.md} 2px`,
+    padding: '8px 12px',
+    fontSize: '14px',
     color: THEME.text.primary,
     lineHeight: '1.4',
     maxWidth: '90%',
   },
   smsOutLabel: {
-    fontSize: '11px',
+    fontSize: '14px',
     fontWeight: 600,
-    color: '#3b82f6',
+    color: THEME.tool.sms,
     textAlign: 'right' as const,
   },
   smsOutBubble: {
-    backgroundColor: 'rgba(59, 130, 246, 0.12)',
-    border: '1px solid rgba(59, 130, 246, 0.15)',
-    borderRadius: '10px 10px 2px 10px',
-    padding: '7px 10px',
-    fontSize: '13px',
+    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+    borderRadius: `${RADIUS.md} ${RADIUS.md} 2px ${RADIUS.md}`,
+    padding: '8px 12px',
+    fontSize: '14px',
     color: THEME.text.primary,
     lineHeight: '1.4',
     maxWidth: '90%',
@@ -362,17 +360,17 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
-    gap: '2px',
+    gap: '3px',
     minWidth: 0,
   },
   activityPrimary: {
-    fontSize: '13px',
+    fontSize: '14px',
     fontWeight: 500,
     color: THEME.text.primary,
     lineHeight: '1.3',
   },
   activitySecondary: {
-    fontSize: '12px',
+    fontSize: '14px',
     color: THEME.text.secondary,
     lineHeight: '1.3',
   },

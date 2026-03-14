@@ -95,10 +95,27 @@ export async function runAgentLoop(
 
       for await (const event of stream) {
         switch (event.type) {
+          case 'thinking_delta': {
+            // Stream thinking text to dashboard for live display
+            const thinkingText = event.text || '';
+            emitSSE('thinking', { text: thinkingText, event_name: eventName });
+            break;
+          }
+          case 'thinking_done': {
+            // Capture complete thinking block (with signature) for conversation history
+            if (event.thinking_block) {
+              assistantBlocks.push({
+                type: 'thinking',
+                thinking: event.thinking_block.thinking,
+                signature: event.thinking_block.signature,
+              });
+            }
+            break;
+          }
           case 'text': {
             const text = event.text || '';
             fullText += text;
-            // Emit thinking event for live dashboard typing
+            // Emit text to dashboard as well
             emitSSE('thinking', { text, event_name: eventName });
             break;
           }

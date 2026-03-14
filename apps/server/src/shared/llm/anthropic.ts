@@ -22,17 +22,25 @@ export class AnthropicClient implements LLMClient {
       { id: string; name: string; inputJson: string }
     >();
 
+    // Track thinking blocks being built (text + signature)
+    const activeThinkingBlocks = new Map<
+      number,
+      { thinking: string; signature: string }
+    >();
+
     const stream = this.client.messages.stream({
       model: this.model,
-      max_tokens: 8192,
+      max_tokens: 16000,
       system,
+      thinking: { type: 'adaptive' },
+      output_config: { effort: 'medium' },
       messages: messages as Anthropic.MessageParam[],
       tools: tools as Anthropic.Tool[],
-    });
+    } as any);
 
     for await (const event of stream) {
       if (event.type === 'content_block_start') {
-        const block = event.content_block;
+        const block = event.content_block as any;
         if (block.type === 'tool_use') {
           activeToolCalls.set(event.index, {
             id: block.id,
@@ -43,11 +51,25 @@ export class AnthropicClient implements LLMClient {
             type: 'tool_use_start',
             tool_call: { id: block.id, name: block.name, input: {} },
           };
+        } else if (block.type === 'thinking') {
+          activeThinkingBlocks.set(event.index, { thinking: '', signature: '' });
         }
       } else if (event.type === 'content_block_delta') {
-        const delta = event.delta;
+        const delta = event.delta as any;
         if (delta.type === 'text_delta') {
           yield { type: 'text', text: delta.text };
+        } else if (delta.type === 'thinking_delta') {
+          const tb = activeThinkingBlocks.get(event.index);
+          if (tb) {
+            tb.thinking += delta.thinking;
+          }
+          // Stream thinking text for live display
+          yield { type: 'thinking_delta', text: delta.thinking };
+        } else if (delta.type === 'signature_delta') {
+          const tb = activeThinkingBlocks.get(event.index);
+          if (tb) {
+            tb.signature += delta.signature;
+          }
         } else if (delta.type === 'input_json_delta') {
           const tc = activeToolCalls.get(event.index);
           if (tc) {
@@ -71,8 +93,14 @@ export class AnthropicClient implements LLMClient {
           };
           activeToolCalls.delete(event.index);
         }
-      } else if (event.type === 'message_stop') {
-        // We need the stop_reason from message_delta, not message_stop
+        const tb = activeThinkingBlocks.get(event.index);
+        if (tb) {
+          yield {
+            type: 'thinking_done',
+            thinking_block: { thinking: tb.thinking, signature: tb.signature },
+          };
+          activeThinkingBlocks.delete(event.index);
+        }
       } else if (event.type === 'message_delta') {
         const md = event.delta as { stop_reason?: string };
         if (md.stop_reason) {

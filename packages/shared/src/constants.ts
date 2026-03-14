@@ -58,7 +58,7 @@ export const SSE_EVENTS = {
 export const PROVIDERS = {
   ANTHROPIC: {
     provider: 'anthropic' as const,
-    model: 'claude-sonnet-4-5-20251001',
+    model: 'claude-opus-4-6',
   },
   CEREBRAS: {
     provider: 'cerebras' as const,
@@ -71,48 +71,54 @@ export const DEFAULT_PROVIDER = PROVIDERS.ANTHROPIC;
 // ─── Tool Card Colors (for dashboard) ────────────────────────────────────────
 
 export const TOOL_COLORS: Record<string, string> = {
-  send_sms: '#3b82f6',
-  create_work_order: '#f59e0b',
-  adjust_price: '#22c55e',
-  log_decision: '#6b7280',
-  get_market_data: '#22c55e',
-  update_schedule: '#8b5cf6',
-  schedule_task: '#14b8a6',
+  send_sms: '#3B82F6',
+  create_work_order: '#F59E0B',
+  adjust_price: '#059669',
+  log_decision: '#6B7280',
+  get_market_data: '#059669',
+  update_schedule: '#7C3AED',
+  schedule_task: '#0D9488',
 };
 
 // ─── Dashboard Theme ─────────────────────────────────────────────────────────
 
 export const THEME = {
   bg: {
-    primary: '#0a0a0f',
-    card: '#12121a',
-    cardHover: '#1a1a28',
-    border: '#1e1e2e',
-    borderLight: '#2a2a3e',
+    primary: '#F8F7F4',
+    card: '#FFFFFF',
+    cardHover: '#F3F2EE',
+    border: '#E8E5DE',
+    borderLight: '#F0EDE6',
+    sidebar: '#FAFAF7',
   },
   text: {
-    primary: '#e4e4e7',
-    secondary: '#a1a1aa',
-    muted: '#71717a',
-    accent: '#f4f4f5',
+    primary: '#1A1A1A',
+    secondary: '#6B7280',
+    muted: '#9CA3AF',
+    accent: '#111827',
   },
   status: {
-    normal: '#22c55e',
-    attention: '#f59e0b',
-    emergency: '#ef4444',
-    selfInitiated: '#14b8a6',
+    normal: '#059669',
+    attention: '#D97706',
+    emergency: '#DC2626',
+    selfInitiated: '#0D9488',
   },
   tool: {
-    sms: '#3b82f6',
-    maintenance: '#f59e0b',
-    pricing: '#22c55e',
-    scheduling: '#8b5cf6',
-    decision: '#6b7280',
-    task: '#14b8a6',
+    sms: '#3B82F6',
+    maintenance: '#F59E0B',
+    pricing: '#059669',
+    scheduling: '#7C3AED',
+    decision: '#6B7280',
+    task: '#0D9488',
+  },
+  accent: {
+    gradient: 'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
+    violet: '#7C3AED',
+    purple: '#764BA2',
   },
   font: {
-    mono: "'JetBrains Mono', 'Fira Code', monospace",
-    sans: "'Inter', system-ui, -apple-system, sans-serif",
+    mono: "'JetBrains Mono', monospace",
+    sans: "'Plus Jakarta Sans', 'Inter', system-ui, sans-serif",
   },
 } as const;
 
@@ -149,7 +155,7 @@ export const DEMO_EVENTS = [
 
 export const AGENT_CONFIG = {
   MAX_ITERATIONS: 10,
-  MAX_TOKENS: 8192,
+  MAX_TOKENS: 16000,
   SCHEDULE_DELAY_MULTIPLIER: 500,   // ms per delay_minute (30 min → 15 sec)
   MAX_PENDING_TASKS: 10,
   MAX_SCHEDULE_DELAY_MINUTES: 60,

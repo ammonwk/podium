@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { THEME, TOOL_COLORS } from '@apm/shared';
-import { RADIUS, ANIMATION } from '../styles/theme';
+import { RADIUS, ANIMATION, SHADOW } from '../styles/theme';
 import type { ToolCallData } from '../hooks/useSSE';
 
 interface Props {
@@ -17,10 +17,10 @@ export const ToolCard: React.FC<Props> = ({ toolCall, index, onClick }) => {
   const cardStyle: React.CSSProperties = {
     ...styles.card,
     borderLeftColor: color,
-    animation: `slideInFromBelow ${ANIMATION.normal} ${ANIMATION.easeOut} both`,
-    animationDelay: `${index * 50}ms`,
-    ...(hovered ? { backgroundColor: THEME.bg.cardHover } : {}),
-    ...(isEmergency ? { animation: `slideInFromBelow ${ANIMATION.normal} ${ANIMATION.easeOut} both, emergencyPulse 2s ease-in-out infinite` } : {}),
+    animation: `toolCardSlideIn ${ANIMATION.slow} ${ANIMATION.easeOut} both`,
+    animationDelay: `${index * 80}ms`,
+    ...(hovered ? { backgroundColor: THEME.bg.cardHover, transform: 'translateY(-1px)', boxShadow: SHADOW.md } : {}),
+    ...(isEmergency ? { animation: `toolCardSlideIn ${ANIMATION.slow} ${ANIMATION.easeOut} both, emergencyPulse 2s ease-in-out infinite` } : {}),
   };
 
   return (
@@ -82,7 +82,12 @@ const SmsCard: React.FC<{
         </div>
       </div>
       <div style={styles.footer}>
-        <span style={styles.footerStatus}>
+        <span style={{
+          ...styles.footerStatus,
+          color: status === 'delivered' ? THEME.status.normal
+               : status === 'queued' ? THEME.text.muted
+               : THEME.status.emergency,
+        }}>
           {status === 'delivered' ? '✓ Delivered' : status === 'queued' ? '● Queued' : '✗ Failed'}
         </span>
         <span style={styles.footerTimestamp}>{formatTime(result.timestamp as string)}</span>
@@ -95,25 +100,25 @@ const SmsCard: React.FC<{
 
 const SEVERITY_STYLES: Record<string, React.CSSProperties> = {
   emergency: {
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
-    color: '#ef4444',
-    border: '1px solid rgba(239, 68, 68, 0.3)',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    color: THEME.status.emergency,
+    border: '1px solid rgba(239, 68, 68, 0.2)',
     animation: 'pulse 1.5s ease-in-out infinite',
   },
   high: {
-    backgroundColor: 'rgba(249, 115, 22, 0.2)',
-    color: '#f97316',
-    border: '1px solid rgba(249, 115, 22, 0.3)',
+    backgroundColor: 'rgba(249, 115, 22, 0.1)',
+    color: '#EA580C',
+    border: '1px solid rgba(249, 115, 22, 0.18)',
   },
   medium: {
-    backgroundColor: 'rgba(234, 179, 8, 0.15)',
-    color: '#eab308',
-    border: '1px solid rgba(234, 179, 8, 0.25)',
+    backgroundColor: 'rgba(234, 179, 8, 0.08)',
+    color: THEME.status.attention,
+    border: '1px solid rgba(234, 179, 8, 0.18)',
   },
   low: {
-    backgroundColor: 'rgba(107, 114, 128, 0.15)',
-    color: '#9ca3af',
-    border: '1px solid rgba(107, 114, 128, 0.25)',
+    backgroundColor: 'rgba(107, 114, 128, 0.08)',
+    color: THEME.text.secondary,
+    border: '1px solid rgba(107, 114, 128, 0.15)',
   },
 };
 
@@ -142,7 +147,7 @@ const WorkOrderCard: React.FC<{
         <div style={styles.bodyRow}>
           <span style={styles.bodyLabel}>Vendor</span>
           <span style={styles.bodyValue}>
-            {vendorName} <span style={{ color: '#eab308' }}>{'★'.repeat(Math.round(vendorRating))}</span>
+            {vendorName} <span style={{ color: THEME.status.attention }}>{'★'.repeat(Math.round(vendorRating))}</span>
             <span style={styles.bodyMuted}> {vendorRating.toFixed(1)}</span>
           </span>
         </div>
@@ -197,7 +202,13 @@ const PriceAdjustCard: React.FC<{
               color: isIncrease ? THEME.status.normal : THEME.status.emergency,
             }}
           >
-            {isIncrease ? '▲' : '▼'} {percentChange}
+            <span style={{
+              display: 'inline-block',
+              animation: 'deltaArrowBounce 0.6s ease-out',
+            }}>
+              {isIncrease ? '▲' : '▼'}
+            </span>
+            {' '}{percentChange}
           </div>
         )}
         {reason && (
@@ -210,10 +221,10 @@ const PriceAdjustCard: React.FC<{
 
 // ─── Decision Card ───────────────────────────────────────────────────────────
 
-const CONFIDENCE_COLORS: Record<string, { bg: string; color: string }> = {
-  high: { bg: 'rgba(34, 197, 94, 0.15)', color: '#22c55e' },
-  medium: { bg: 'rgba(234, 179, 8, 0.15)', color: '#eab308' },
-  low: { bg: 'rgba(239, 68, 68, 0.15)', color: '#ef4444' },
+const CONFIDENCE_COLORS: Record<string, { bg: string; color: string; border: string }> = {
+  high: { bg: 'rgba(34, 197, 94, 0.08)', color: THEME.status.normal, border: 'rgba(34, 197, 94, 0.18)' },
+  medium: { bg: 'rgba(234, 179, 8, 0.08)', color: THEME.status.attention, border: 'rgba(234, 179, 8, 0.18)' },
+  low: { bg: 'rgba(239, 68, 68, 0.08)', color: THEME.status.emergency, border: 'rgba(239, 68, 68, 0.18)' },
 };
 
 const DecisionCard: React.FC<{
@@ -244,10 +255,10 @@ const DecisionCard: React.FC<{
             ...styles.confidenceBadge,
             backgroundColor: confStyle.bg,
             color: confStyle.color,
-            border: `1px solid ${confStyle.color}30`,
+            border: `1px solid ${confStyle.border}`,
           }}
         >
-          {confidence}
+          {confidence.charAt(0).toUpperCase() + confidence.slice(1)}
         </span>
       </div>
       <div style={styles.body}>
@@ -317,7 +328,7 @@ const MarketDataCard: React.FC<{
                 <span style={styles.bodyValue}>{p.name}</span>
                 <span style={styles.bodyMuted}>${p.current_price}</span>
                 <span style={{
-                  fontSize: '12px',
+                  fontSize: '14px',
                   fontWeight: 600,
                   color: p.gap.startsWith('-') ? THEME.status.emergency : THEME.status.normal,
                 }}>
@@ -352,12 +363,12 @@ const ScheduleUpdateCard: React.FC<{
       </div>
       <div style={styles.body}>
         <div style={styles.bodyRow}>
-          <span style={styles.bodyLabel}>{propertyName}</span>
+          <span style={styles.schedulePropertyName}>{propertyName}</span>
         </div>
         <div style={styles.scheduleChange}>
           <span style={styles.scheduleType}>{eventType}:</span>
           <span style={styles.scheduleOld}>{oldTime}</span>
-          <span style={styles.scheduleArrow}>→</span>
+          <span style={{ ...styles.scheduleArrow, color }}>→</span>
           <span style={styles.scheduleNew}>{newTime}</span>
         </div>
       </div>
@@ -384,15 +395,22 @@ const ScheduleTaskCard: React.FC<{
     <>
       <div style={styles.header}>
         <span style={{ ...styles.headerLabel, color }}>
-          ⏰ Scheduled Task
+          Scheduled Task
         </span>
+        <span style={styles.scheduledTaskClock}>⏱</span>
       </div>
-      <div style={{ ...styles.body, borderStyle: 'dashed', borderColor: `${color}30`, borderWidth: '1px', borderRadius: RADIUS.sm, padding: '10px' }}>
-        <div style={styles.bodyValue}>{description}</div>
+      <div style={styles.scheduledTaskBody}>
+        <div style={styles.scheduledTaskDescription}>{description}</div>
       </div>
       {firesIn && (
         <div style={styles.footer}>
-          <span style={{ color, fontSize: '12px', fontWeight: 500 }}>
+          <span style={{
+            color,
+            fontSize: '14px',
+            fontWeight: 600,
+            fontFamily: THEME.font.mono,
+            letterSpacing: '-0.01em',
+          }}>
             Fires in {firesIn}
           </span>
         </div>
@@ -442,77 +460,79 @@ const styles: Record<string, React.CSSProperties> = {
     border: `1px solid ${THEME.bg.border}`,
     borderLeft: `3px solid ${THEME.bg.border}`,
     borderRadius: RADIUS.md,
-    padding: '12px 16px',
+    padding: '14px 18px',
     cursor: 'pointer',
-    transition: `all ${ANIMATION.fast} ${ANIMATION.easeOut}`,
-    boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+    transition: `all ${ANIMATION.normal} ${ANIMATION.easeOut}`,
+    boxShadow: SHADOW.sm,
     display: 'flex',
     flexDirection: 'column',
-    gap: '8px',
+    gap: '10px',
   },
   header: {
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
+    gap: '10px',
     flexWrap: 'wrap',
   },
   headerLabel: {
-    fontSize: '13px',
+    fontSize: '14px',
     fontWeight: 700,
     textTransform: 'uppercase' as const,
     letterSpacing: '0.05em',
+    color: THEME.text.accent,
   },
   headerDetail: {
-    fontSize: '13px',
+    fontSize: '14px',
     color: THEME.text.secondary,
     fontWeight: 500,
   },
   severityBadge: {
-    fontSize: '10px',
+    fontSize: '11px',
     fontWeight: 700,
-    padding: '2px 7px',
-    borderRadius: '4px',
+    padding: '3px 9px',
+    borderRadius: '5px',
     letterSpacing: '0.05em',
   },
   categoryBadge: {
-    fontSize: '10px',
+    fontSize: '11px',
     fontWeight: 600,
-    padding: '2px 7px',
-    borderRadius: '4px',
-    backgroundColor: 'rgba(107, 114, 128, 0.15)',
+    padding: '3px 9px',
+    borderRadius: '5px',
+    backgroundColor: 'rgba(107, 114, 128, 0.08)',
     color: THEME.text.secondary,
-    border: '1px solid rgba(107, 114, 128, 0.2)',
+    border: '1px solid rgba(107, 114, 128, 0.12)',
     textTransform: 'capitalize' as const,
   },
   confidenceBadge: {
-    fontSize: '10px',
-    fontWeight: 600,
-    padding: '2px 7px',
-    borderRadius: '4px',
+    fontSize: '12px',
+    fontWeight: 700,
+    padding: '3px 10px',
+    borderRadius: '5px',
+    letterSpacing: '0.02em',
   },
   body: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '4px',
+    gap: '5px',
   },
   bodyRow: {
     display: 'flex',
     alignItems: 'baseline',
-    gap: '8px',
+    gap: '10px',
   },
   bodyLabel: {
-    fontSize: '12px',
+    fontSize: '14px',
     color: THEME.text.muted,
-    minWidth: '60px',
+    minWidth: '65px',
     flexShrink: 0,
   },
   bodyValue: {
-    fontSize: '14px',
+    fontSize: '15px',
     color: THEME.text.primary,
     lineHeight: '1.4',
   },
   bodyMuted: {
-    fontSize: '12px',
+    fontSize: '14px',
     color: THEME.text.muted,
   },
   footer: {
@@ -520,32 +540,33 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: '8px',
-    paddingTop: '4px',
-    borderTop: `1px solid ${THEME.bg.border}`,
+    paddingTop: '6px',
+    borderTop: `1px solid ${THEME.bg.borderLight}`,
   },
   footerStatus: {
-    fontSize: '12px',
+    fontSize: '14px',
     color: THEME.text.muted,
     fontWeight: 500,
   },
   footerTimestamp: {
-    fontSize: '11px',
+    fontSize: '14px',
     color: THEME.text.muted,
     fontFamily: THEME.font.mono,
   },
   footerCost: {
-    fontSize: '16px',
+    fontSize: '18px',
     fontWeight: 700,
     color: THEME.text.accent,
+    fontFamily: THEME.font.mono,
   },
   footerCaveat: {
-    fontSize: '12px',
+    fontSize: '14px',
     color: THEME.text.muted,
     fontStyle: 'italic',
     lineHeight: '1.4',
   },
   footerImpact: {
-    fontSize: '12px',
+    fontSize: '14px',
     color: THEME.text.secondary,
     lineHeight: '1.4',
   },
@@ -556,14 +577,14 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'flex-end',
   },
   smsBubble: {
-    backgroundColor: 'rgba(59, 130, 246, 0.15)',
-    border: '1px solid rgba(59, 130, 246, 0.2)',
-    borderRadius: '12px 12px 2px 12px',
-    padding: '8px 12px',
-    fontSize: '14px',
+    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+    border: '1px solid rgba(59, 130, 246, 0.12)',
+    borderRadius: '14px 14px 2px 14px',
+    padding: '10px 14px',
+    fontSize: '15px',
     color: THEME.text.primary,
     maxWidth: '85%',
-    lineHeight: '1.45',
+    lineHeight: '1.5',
   },
 
   // Price specific
@@ -574,38 +595,39 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'flex-start',
   },
   pricePropertyName: {
-    fontSize: '13px',
+    fontSize: '14px',
     color: THEME.text.secondary,
     fontWeight: 500,
   },
   priceNumbers: {
     display: 'flex',
     alignItems: 'baseline',
-    gap: '8px',
+    gap: '10px',
   },
   priceOld: {
-    fontSize: '20px',
+    fontSize: '22px',
     color: THEME.text.muted,
     fontWeight: 500,
     textDecoration: 'line-through',
     fontFamily: THEME.font.mono,
   },
   priceArrow: {
-    fontSize: '18px',
+    fontSize: '20px',
     color: THEME.text.muted,
   },
   priceNew: {
-    fontSize: '24px',
+    fontSize: '28px',
     fontWeight: 700,
     color: THEME.text.accent,
     fontFamily: THEME.font.mono,
+    animation: 'numberRoll 0.4s ease-out',
   },
   priceDelta: {
-    fontSize: '16px',
+    fontSize: '18px',
     fontWeight: 700,
   },
   priceReason: {
-    fontSize: '12px',
+    fontSize: '14px',
     color: THEME.text.muted,
     lineHeight: '1.4',
     marginTop: '2px',
@@ -613,7 +635,7 @@ const styles: Record<string, React.CSSProperties> = {
 
   // Decision specific
   decisionSummary: {
-    fontSize: '14px',
+    fontSize: '15px',
     color: THEME.text.primary,
     lineHeight: '1.5',
   },
@@ -622,27 +644,28 @@ const styles: Record<string, React.CSSProperties> = {
     marginLeft: '4px',
     background: 'none',
     border: 'none',
-    color: '#3b82f6',
+    color: THEME.tool.sms,
     cursor: 'pointer',
-    fontSize: '12px',
+    fontSize: '14px',
     fontWeight: 500,
     fontFamily: THEME.font.sans,
     padding: 0,
+    transition: `opacity ${ANIMATION.fast} ${ANIMATION.easeOut}`,
   },
 
   // Market data specific
   marketMetrics: {
     display: 'flex',
-    gap: '20px',
-    marginBottom: '4px',
+    gap: '24px',
+    marginBottom: '6px',
   },
   marketMetric: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '1px',
+    gap: '2px',
   },
   marketMetricValue: {
-    fontSize: '20px',
+    fontSize: '24px',
     fontWeight: 700,
     color: THEME.text.accent,
     fontFamily: THEME.font.mono,
@@ -651,65 +674,99 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '11px',
     color: THEME.text.muted,
     textTransform: 'uppercase' as const,
-    letterSpacing: '0.05em',
+    letterSpacing: '0.06em',
+    fontWeight: 600,
   },
   marketEvents: {
-    fontSize: '13px',
+    fontSize: '14px',
     color: THEME.text.secondary,
     lineHeight: '1.4',
   },
   marketProperties: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '3px',
+    gap: '4px',
     marginTop: '4px',
   },
   marketPropertyRow: {
     display: 'flex',
     alignItems: 'baseline',
     gap: '10px',
-    fontSize: '13px',
+    fontSize: '14px',
   },
 
   // Schedule specific
+  schedulePropertyName: {
+    fontSize: '14px',
+    color: THEME.text.secondary,
+    fontWeight: 500,
+  },
   scheduleChange: {
     display: 'flex',
     alignItems: 'baseline',
-    gap: '8px',
+    gap: '10px',
     flexWrap: 'wrap',
   },
   scheduleType: {
-    fontSize: '13px',
+    fontSize: '15px',
     color: THEME.text.secondary,
     fontWeight: 500,
     textTransform: 'capitalize' as const,
   },
   scheduleOld: {
-    fontSize: '16px',
+    fontSize: '18px',
     color: THEME.text.muted,
     fontFamily: THEME.font.mono,
     textDecoration: 'line-through',
   },
   scheduleArrow: {
-    fontSize: '16px',
-    color: '#8b5cf6',
+    fontSize: '18px',
+    color: THEME.tool.scheduling,
   },
   scheduleNew: {
-    fontSize: '16px',
+    fontSize: '18px',
     fontWeight: 600,
     color: THEME.text.accent,
     fontFamily: THEME.font.mono,
   },
 
+  // Scheduled task specific
+  scheduledTaskClock: {
+    fontSize: '16px',
+    animation: 'clockTick 2s ease-in-out infinite',
+    display: 'inline-block',
+  },
+  scheduledTaskBody: {
+    borderStyle: 'dashed',
+    borderColor: 'rgba(20, 184, 166, 0.2)',
+    borderWidth: '1px',
+    borderRadius: RADIUS.sm,
+    padding: '12px 14px',
+    backgroundColor: 'rgba(20, 184, 166, 0.04)',
+    animation: 'dashedBorderPulse 3s ease-in-out infinite',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+  },
+  scheduledTaskDescription: {
+    fontSize: '15px',
+    color: THEME.text.primary,
+    lineHeight: '1.45',
+  },
+
   // Generic
   genericPre: {
-    fontSize: '12px',
-    color: THEME.text.secondary,
+    fontSize: '14px',
+    color: THEME.text.primary,
     fontFamily: THEME.font.mono,
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-all',
     lineHeight: '1.4',
-    maxHeight: '100px',
+    maxHeight: '120px',
     overflow: 'auto',
+    backgroundColor: THEME.bg.primary,
+    padding: '10px 12px',
+    borderRadius: RADIUS.sm,
+    border: `1px solid ${THEME.bg.borderLight}`,
   },
 };

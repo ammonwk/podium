@@ -13,22 +13,23 @@ html {
 }
 
 body {
-  background: #0a0a0f;
-  color: #e4e4e7;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: #F8F7F4;
+  color: #1A1A1A;
+  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 14px;
   line-height: 1.5;
   overflow: hidden;
 }
 
 /* ─── Selection ───────────────────────────────────────────────────────────── */
 ::selection {
-  background: rgba(59, 130, 246, 0.3);
-  color: #f4f4f5;
+  background: rgba(124, 58, 237, 0.15);
+  color: #111827;
 }
 
 /* ─── Focus ───────────────────────────────────────────────────────────────── */
 :focus-visible {
-  outline: 2px solid rgba(59, 130, 246, 0.5);
+  outline: 2px solid rgba(124, 58, 237, 0.4);
   outline-offset: 2px;
 }
 
@@ -43,18 +44,19 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #2a2a3e;
+  background: #D1CFC8;
   border-radius: 3px;
+  transition: background 0.15s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3a3a4e;
+  background: #B8B5AE;
 }
 
 /* Firefox */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #2a2a3e transparent;
+  scrollbar-color: #D1CFC8 transparent;
 }
 
 /* ─── Keyframe Animations ─────────────────────────────────────────────────── */
@@ -64,47 +66,39 @@ body {
   50% { opacity: 0.5; }
 }
 
-@keyframes pulseGlow {
-  0%, 100% { box-shadow: 0 0 4px currentColor; }
-  50% { box-shadow: 0 0 16px currentColor; }
+@keyframes breathe {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.15); opacity: 1; }
 }
 
 @keyframes pulseDot {
   0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.4); opacity: 0.6; }
+  50% { transform: scale(1.3); opacity: 0.7; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
 }
 
 @keyframes slideInFromBelow {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
 @keyframes slideInFromAbove {
-  from {
-    transform: translateY(-10px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
+  from { transform: translateY(-12px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
 @keyframes slideInFromLeft {
-  from {
-    transform: translateX(-20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
+  from { transform: translateX(-16px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideInFromRight {
+  from { transform: translateX(20px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
 }
 
 @keyframes fadeIn {
@@ -118,14 +112,8 @@ body {
 }
 
 @keyframes scaleIn {
-  from {
-    transform: scale(0.95);
-    opacity: 0;
-  }
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
 }
 
 @keyframes cursorBlink {
@@ -134,42 +122,34 @@ body {
 }
 
 @keyframes emergencyPulse {
-  0%, 100% {
-    box-shadow: 0 0 4px rgba(239, 68, 68, 0.2);
-    border-color: rgba(239, 68, 68, 0.5);
-  }
-  50% {
-    box-shadow: 0 0 16px rgba(239, 68, 68, 0.4);
-    border-color: rgba(239, 68, 68, 0.8);
-  }
+  0%, 100% { box-shadow: 0 2px 8px rgba(220,38,38,0.1); border-color: rgba(220,38,38,0.3); }
+  50% { box-shadow: 0 2px 16px rgba(220,38,38,0.25); border-color: rgba(220,38,38,0.6); }
 }
 
 @keyframes attentionPulse {
-  0%, 100% {
-    box-shadow: 0 0 4px rgba(245, 158, 11, 0.2);
-    border-color: rgba(245, 158, 11, 0.5);
-  }
-  50% {
-    box-shadow: 0 0 16px rgba(245, 158, 11, 0.4);
-    border-color: rgba(245, 158, 11, 0.8);
-  }
+  0%, 100% { box-shadow: 0 2px 8px rgba(217,119,6,0.1); border-color: rgba(217,119,6,0.3); }
+  50% { box-shadow: 0 2px 12px rgba(217,119,6,0.2); border-color: rgba(217,119,6,0.5); }
 }
 
 @keyframes activePulseRing {
-  0% {
-    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5);
-  }
-  70% {
-    box-shadow: 0 0 0 6px rgba(59, 130, 246, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
-  }
+  0% { box-shadow: 0 0 0 0 rgba(124,58,237,0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(124,58,237,0); }
+  100% { box-shadow: 0 0 0 0 rgba(124,58,237,0); }
 }
 
 @keyframes tealPulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.7; }
+}
+
+@keyframes tealGlow {
+  0%, 100% { box-shadow: 0 2px 8px rgba(13,148,136,0.1); }
+  50% { box-shadow: 0 2px 16px rgba(13,148,136,0.2); }
+}
+
+@keyframes selfInitiatedGlow {
+  0%, 100% { box-shadow: 0 1px 4px rgba(13,148,136,0.1); border-color: rgba(13,148,136,0.3); }
+  50% { box-shadow: 0 2px 12px rgba(13,148,136,0.2); border-color: rgba(13,148,136,0.5); }
 }
 
 @keyframes shimmer {
@@ -178,22 +158,13 @@ body {
 }
 
 @keyframes moveToTimeline {
-  0% {
-    transform: translateY(0);
-    opacity: 1;
-  }
-  50% {
-    transform: translateY(-30px);
-    opacity: 0.5;
-  }
-  100% {
-    transform: translateY(-60px);
-    opacity: 0;
-  }
+  0% { transform: translateY(0) scale(1); opacity: 1; }
+  40% { transform: translateY(-10px) scale(1.02); opacity: 0.8; }
+  100% { transform: translateY(-40px) scale(0.95); opacity: 0; }
 }
 
 @keyframes numberRoll {
-  from { transform: translateY(10px); opacity: 0; }
+  from { transform: translateY(8px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
 
@@ -209,12 +180,69 @@ body {
 }
 
 @keyframes modalPanelIn {
-  from {
-    transform: scale(0.95) translateY(10px);
-    opacity: 0;
-  }
-  to {
-    transform: scale(1) translateY(0);
-    opacity: 1;
-  }
+  from { transform: scale(0.96) translateY(8px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+@keyframes toolCardSlideIn {
+  from { transform: translateY(12px) scale(0.98); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+@keyframes deltaArrowBounce {
+  0%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-3px); }
+  60% { transform: translateY(1px); }
+}
+
+@keyframes clockTick {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(10deg); }
+}
+
+@keyframes dashedBorderPulse {
+  0%, 100% { border-color: rgba(13,148,136,0.2); }
+  50% { border-color: rgba(13,148,136,0.4); }
+}
+
+@keyframes buttonPress {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.97); }
+  100% { transform: scale(1); }
+}
+
+@keyframes houseEntrance {
+  from { transform: rotateX(-20deg) rotateY(45deg) translateY(30px) scale(0.8); opacity: 0; }
+  to { transform: rotateX(-20deg) rotateY(45deg) translateY(0) scale(1); opacity: 1; }
+}
+
+@keyframes chimneySmoke {
+  0% { transform: translateY(0) scale(0.6); opacity: 0.5; }
+  50% { transform: translateY(-12px) scale(1); opacity: 0.3; }
+  100% { transform: translateY(-24px) scale(1.2); opacity: 0; }
+}
+
+@keyframes gentleShake {
+  0%, 100% { transform: translateX(0); }
+  10% { transform: translateX(-2px); }
+  20% { transform: translateX(2px); }
+  30% { transform: translateX(-2px); }
+  40% { transform: translateX(2px); }
+  50% { transform: translateX(0); }
+}
+
+@keyframes windowFlicker {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+@keyframes gradientText {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes pillPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(124,58,237,0.3); }
+  50% { box-shadow: 0 0 0 4px rgba(124,58,237,0); }
 }

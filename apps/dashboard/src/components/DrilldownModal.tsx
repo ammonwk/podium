@@ -1,6 +1,6 @@
 import React, { useEffect, useCallback } from 'react';
 import { THEME, TOOL_COLORS } from '@apm/shared';
-import { RADIUS, ANIMATION } from '../styles/theme';
+import { RADIUS, ANIMATION, SHADOW } from '../styles/theme';
 import type { PropertyState, EventState, ToolCallData, ActivityItem } from '../hooks/useSSE';
 
 type DrilldownData =
@@ -72,8 +72,8 @@ const PropertyDetail: React.FC<{ property: PropertyState }> = ({ property }) => 
         <div
           style={{
             ...styles.statusPill,
-            backgroundColor: `${statusColors[property.status]}20`,
-            color: statusColors[property.status],
+            backgroundColor: `${statusColors[property.status] || THEME.text.muted}15`,
+            color: statusColors[property.status] || THEME.text.muted,
           }}
         >
           {property.status}
@@ -100,7 +100,7 @@ const PropertyDetail: React.FC<{ property: PropertyState }> = ({ property }) => 
         <div style={styles.detailSection}>
           <h3 style={styles.sectionTitle}>Active Issues</h3>
           {property.activeIssues.map((issue, i) => (
-            <div key={i} style={styles.issueItem}>
+            <div key={`issue-${i}`} style={styles.issueItem}>
               <span style={styles.issueDot}>●</span> {issue}
             </div>
           ))}
@@ -111,13 +111,13 @@ const PropertyDetail: React.FC<{ property: PropertyState }> = ({ property }) => 
         <div style={styles.detailSection}>
           <h3 style={styles.sectionTitle}>Schedule</h3>
           {property.schedule.map((seg, i) => (
-            <div key={i} style={styles.scheduleRow}>
+            <div key={`sched-${seg.type}-${i}`} style={styles.scheduleRow}>
               <span style={{
                 ...styles.scheduleType,
-                color: seg.type === 'checkout' ? '#3b82f6'
-                  : seg.type === 'cleaning' ? '#eab308'
-                  : seg.type === 'checkin' ? '#22c55e'
-                  : '#ef4444',
+                color: seg.type === 'checkout' ? '#2563EB'
+                  : seg.type === 'cleaning' ? '#B45309'
+                  : seg.type === 'checkin' ? '#047857'
+                  : '#B91C1C',
               }}>
                 {seg.type}
               </span>
@@ -141,14 +141,14 @@ const EventDetail: React.FC<{ event: EventState }> = ({ event }) => {
           style={{
             ...styles.statusPill,
             backgroundColor: event.status === 'done'
-              ? `${THEME.status.normal}20`
+              ? `${THEME.status.normal}15`
               : event.status === 'active'
-              ? 'rgba(59, 130, 246, 0.15)'
-              : 'rgba(107, 114, 128, 0.15)',
+              ? 'rgba(59, 130, 246, 0.10)'
+              : 'rgba(107, 114, 128, 0.10)',
             color: event.status === 'done'
               ? THEME.status.normal
               : event.status === 'active'
-              ? '#3b82f6'
+              ? '#2563EB'
               : THEME.text.muted,
           }}
         >
@@ -266,13 +266,13 @@ const DetailRow: React.FC<{
 
 const SyntaxHighlightedJson: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
   const json = JSON.stringify(data, null, 2);
-  // Simple syntax highlighting
+  // Light-theme syntax highlighting
   const highlighted = json
-    .replace(/"([^"]+)":/g, '<span style="color: #8b5cf6">"$1"</span>:')
-    .replace(/: "([^"]*?)"/g, ': <span style="color: #22c55e">"$1"</span>')
-    .replace(/: (\d+\.?\d*)/g, ': <span style="color: #3b82f6">$1</span>')
-    .replace(/: (true|false)/g, ': <span style="color: #f59e0b">$1</span>')
-    .replace(/: (null)/g, ': <span style="color: #ef4444">$1</span>');
+    .replace(/"([^"]+)":/g, '<span style="color: #7C3AED">"$1"</span>:')
+    .replace(/: "([^"]*?)"/g, ': <span style="color: #059669">"$1"</span>')
+    .replace(/: (\d+\.?\d*)/g, ': <span style="color: #3B82F6">$1</span>')
+    .replace(/: (true|false)/g, ': <span style="color: #D97706">$1</span>')
+    .replace(/: (null)/g, ': <span style="color: #DC2626">$1</span>');
 
   return (
     <pre
@@ -291,13 +291,13 @@ const styles: Record<string, React.CSSProperties> = {
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1000,
     animation: `modalOverlayIn ${ANIMATION.normal} ${ANIMATION.easeOut}`,
-    backdropFilter: 'blur(4px)',
+    backdropFilter: 'blur(8px)',
   },
   panel: {
     backgroundColor: THEME.bg.card,
@@ -308,7 +308,7 @@ const styles: Record<string, React.CSSProperties> = {
     maxHeight: '80vh',
     position: 'relative',
     animation: `modalPanelIn ${ANIMATION.normal} ${ANIMATION.easeOut}`,
-    boxShadow: '0 16px 64px rgba(0, 0, 0, 0.5)',
+    boxShadow: SHADOW.xl,
     display: 'flex',
     flexDirection: 'column',
   },
@@ -324,7 +324,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'none',
     border: `1px solid ${THEME.bg.border}`,
     borderRadius: RADIUS.sm,
-    color: THEME.text.muted,
+    color: THEME.text.primary,
     fontSize: '20px',
     cursor: 'pointer',
     zIndex: 1,
@@ -345,18 +345,18 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: 'wrap',
   },
   detailTitle: {
-    fontSize: '20px',
+    fontSize: '22px',
     fontWeight: 700,
     color: THEME.text.accent,
     margin: 0,
     letterSpacing: '-0.01em',
   },
   statusPill: {
-    fontSize: '11px',
+    fontSize: '14px',
     fontWeight: 600,
-    padding: '3px 10px',
+    padding: '4px 12px',
     borderRadius: RADIUS.full,
-    backgroundColor: 'rgba(107, 114, 128, 0.15)',
+    backgroundColor: 'rgba(107, 114, 128, 0.10)',
     color: THEME.text.secondary,
     textTransform: 'uppercase' as const,
     letterSpacing: '0.05em',
@@ -372,7 +372,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '12px',
   },
   detailLabel: {
-    fontSize: '12px',
+    fontSize: '14px',
     color: THEME.text.muted,
     fontWeight: 500,
     minWidth: '100px',
@@ -381,7 +381,7 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: '0.04em',
   },
   detailValue: {
-    fontSize: '14px',
+    fontSize: '15px',
     color: THEME.text.primary,
     lineHeight: '1.4',
   },
@@ -391,7 +391,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '8px',
   },
   sectionTitle: {
-    fontSize: '13px',
+    fontSize: '14px',
     fontWeight: 700,
     color: THEME.text.secondary,
     textTransform: 'uppercase' as const,
@@ -399,12 +399,12 @@ const styles: Record<string, React.CSSProperties> = {
     margin: 0,
   },
   codeBlock: {
-    backgroundColor: THEME.bg.primary,
+    backgroundColor: '#F9FAFB',
     border: `1px solid ${THEME.bg.border}`,
     borderRadius: RADIUS.sm,
-    padding: '12px 14px',
+    padding: '14px 16px',
     fontFamily: THEME.font.mono,
-    fontSize: '12px',
+    fontSize: '14px',
     lineHeight: '1.55',
     color: THEME.text.primary,
     whiteSpace: 'pre-wrap',
@@ -414,22 +414,22 @@ const styles: Record<string, React.CSSProperties> = {
     margin: 0,
   },
   miniCodeBlock: {
-    backgroundColor: THEME.bg.primary,
+    backgroundColor: '#F9FAFB',
     border: `1px solid ${THEME.bg.border}`,
     borderRadius: '4px',
-    padding: '6px 8px',
+    padding: '8px 10px',
     fontFamily: THEME.font.mono,
-    fontSize: '11px',
+    fontSize: '14px',
     lineHeight: '1.4',
     color: THEME.text.secondary,
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-all',
-    maxHeight: '100px',
+    maxHeight: '120px',
     overflowY: 'auto',
     margin: '4px 0 0',
   },
   issueItem: {
-    fontSize: '14px',
+    fontSize: '15px',
     color: THEME.text.primary,
     lineHeight: '1.4',
     padding: '4px 0',
@@ -446,13 +446,13 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '3px 0',
   },
   scheduleType: {
-    fontSize: '13px',
+    fontSize: '14px',
     fontWeight: 600,
     textTransform: 'capitalize' as const,
     minWidth: '90px',
   },
   scheduleRange: {
-    fontSize: '13px',
+    fontSize: '14px',
     color: THEME.text.muted,
     fontFamily: THEME.font.mono,
   },
@@ -461,7 +461,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderBottom: `1px solid ${THEME.bg.border}`,
   },
   toolCallName: {
-    fontSize: '13px',
+    fontSize: '14px',
     fontWeight: 600,
     textTransform: 'uppercase' as const,
     letterSpacing: '0.04em',

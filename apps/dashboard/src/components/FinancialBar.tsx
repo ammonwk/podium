@@ -1,19 +1,22 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { THEME } from '@apm/shared';
+import { SHADOW } from '../styles/theme';
 
 interface Props {
   financials: { revenue: number; costs: number; decisions: number };
 }
 
-// Animated number component
+// Animated number component with smooth roll-up
 const AnimatedNumber: React.FC<{
   value: number;
   prefix?: string;
+  icon: string;
   color: string;
   label: string;
   isCurrency?: boolean;
-}> = ({ value, prefix = '', color, label, isCurrency = false }) => {
+}> = ({ value, prefix = '', icon, color, label, isCurrency = false }) => {
   const [displayValue, setDisplayValue] = useState(value);
+  const [isAnimating, setIsAnimating] = useState(false);
   const prevValueRef = useRef(value);
   const rafRef = useRef<number | null>(null);
 
@@ -22,14 +25,15 @@ const AnimatedNumber: React.FC<{
     const diff = value - prev;
     if (diff === 0) return;
 
+    setIsAnimating(true);
     const startTime = performance.now();
-    const duration = 500;
+    const duration = 600;
 
     const animate = (currentTime: number) => {
       const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / duration, 1);
-      // Ease-out quad
-      const eased = 1 - (1 - progress) * (1 - progress);
+      // Ease-out cubic for a more satisfying deceleration
+      const eased = 1 - Math.pow(1 - progress, 3);
       const current = prev + diff * eased;
       setDisplayValue(Math.round(current));
 
@@ -37,6 +41,7 @@ const AnimatedNumber: React.FC<{
         rafRef.current = requestAnimationFrame(animate);
       } else {
         prevValueRef.current = value;
+        setIsAnimating(false);
       }
     };
 
@@ -53,11 +58,16 @@ const AnimatedNumber: React.FC<{
 
   return (
     <div style={styles.metric}>
-      <div style={styles.metricLabel}>{label}</div>
+      <div style={styles.metricLabel}>
+        <span style={styles.metricIcon}>{icon}</span>
+        {label}
+      </div>
       <div
         style={{
           ...styles.metricValue,
           color,
+          transition: 'color 0.3s ease',
+          ...(isAnimating ? { textShadow: `0 0 12px ${color}20` } : {}),
         }}
       >
         {formatted}
@@ -68,13 +78,14 @@ const AnimatedNumber: React.FC<{
 
 export const FinancialBar: React.FC<Props> = ({ financials }) => {
   const net = financials.revenue - financials.costs;
-  const netColor = net >= 0 ? THEME.text.accent : THEME.status.emergency;
+  const netColor = net >= 0 ? THEME.status.normal : THEME.status.emergency;
 
   return (
     <div style={styles.container}>
       <AnimatedNumber
         value={financials.revenue}
         color={THEME.status.normal}
+        icon="↑"
         label="Revenue Impact"
         isCurrency
         prefix="+"
@@ -85,6 +96,7 @@ export const FinancialBar: React.FC<Props> = ({ financials }) => {
       <AnimatedNumber
         value={financials.costs}
         color={THEME.status.emergency}
+        icon="↓"
         label="Costs"
         isCurrency
         prefix="-"
@@ -95,6 +107,7 @@ export const FinancialBar: React.FC<Props> = ({ financials }) => {
       <AnimatedNumber
         value={net}
         color={netColor}
+        icon="="
         label="Net Impact"
         isCurrency
         prefix={net >= 0 ? '+' : '-'}
@@ -105,6 +118,7 @@ export const FinancialBar: React.FC<Props> = ({ financials }) => {
       <AnimatedNumber
         value={financials.decisions}
         color={THEME.text.secondary}
+        icon="◆"
         label="Decisions"
       />
     </div>
@@ -116,28 +130,34 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: '40px',
-    padding: '12px 32px',
-    borderTop: `1px solid ${THEME.bg.border}`,
-    backgroundColor: THEME.bg.primary,
+    gap: '48px',
+    padding: '16px 32px',
+    backgroundColor: THEME.bg.card,
+    boxShadow: SHADOW.sm,
     flexShrink: 0,
-    minHeight: '68px',
+    minHeight: '72px',
   },
   metric: {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: '2px',
+    gap: '3px',
   },
   metricLabel: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
     fontSize: '11px',
     fontWeight: 600,
     color: THEME.text.muted,
     textTransform: 'uppercase' as const,
     letterSpacing: '0.08em',
   },
+  metricIcon: {
+    fontSize: '11px',
+  },
   metricValue: {
-    fontSize: '26px',
+    fontSize: '22px',
     fontWeight: 700,
     fontFamily: THEME.font.mono,
     letterSpacing: '-0.02em',
@@ -145,7 +165,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   divider: {
     width: '1px',
-    height: '36px',
+    height: '32px',
     backgroundColor: THEME.bg.border,
   },
 };

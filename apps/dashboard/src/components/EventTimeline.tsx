@@ -11,9 +11,9 @@ interface Props {
 }
 
 const SOURCE_BADGES: Record<string, { label: string; bg: string; color: string }> = {
-  human: { label: 'INBOUND', bg: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6' },
-  system: { label: 'SYSTEM', bg: 'rgba(107, 114, 128, 0.15)', color: '#9ca3af' },
-  'self-scheduled': { label: 'SELF-INITIATED', bg: 'rgba(20, 184, 166, 0.15)', color: '#14b8a6' },
+  human: { label: 'INBOUND', bg: 'rgba(59, 130, 246, 0.15)', color: THEME.tool.sms },
+  system: { label: 'SYSTEM', bg: 'rgba(107, 114, 128, 0.15)', color: THEME.text.secondary },
+  'self-scheduled': { label: 'SELF-INITIATED', bg: 'rgba(20, 184, 166, 0.15)', color: THEME.status.selfInitiated },
 };
 
 export const EventTimeline: React.FC<Props> = ({
@@ -98,7 +98,7 @@ const EventItem: React.FC<{
   const statusIcon = event.status === 'done'
     ? { text: '●', color: THEME.status.normal, animation: undefined }
     : event.status === 'active'
-    ? { text: '◉', color: '#3b82f6', animation: 'activePulseRing 1.5s ease-in-out infinite' }
+    ? { text: '◉', color: THEME.tool.sms, animation: 'activePulseRing 1.5s ease-in-out infinite' }
     : event.status === 'queued'
     ? { text: '⏳', color: THEME.text.muted, animation: undefined }
     : { text: '○', color: THEME.text.muted, animation: undefined };
@@ -113,7 +113,7 @@ const EventItem: React.FC<{
           : hovered
           ? THEME.bg.cardHover
           : 'transparent',
-        borderLeftColor: isActive ? '#3b82f6' : 'transparent',
+        borderLeftColor: isActive ? THEME.tool.sms : 'transparent',
         animation: `slideInFromLeft ${ANIMATION.normal} ${ANIMATION.easeOut} both`,
       }}
       onClick={onClick}
@@ -149,7 +149,8 @@ const EventItem: React.FC<{
               color: badge.color,
               ...(event.source === 'self-scheduled'
                 ? {
-                    boxShadow: `0 0 8px rgba(20, 184, 166, 0.2)`,
+                    boxShadow: '0 0 8px rgba(20, 184, 166, 0.2)',
+                    animation: 'selfInitiatedGlow 2.5s ease-in-out infinite',
                     fontWeight: 700,
                   }
                 : {}),
@@ -251,14 +252,14 @@ const styles: Record<string, React.CSSProperties> = {
     flexShrink: 0,
   },
   headerTitle: {
-    fontSize: '13px',
+    fontSize: '14px',
     fontWeight: 700,
     color: THEME.text.secondary,
     textTransform: 'uppercase' as const,
     letterSpacing: '0.08em',
   },
   headerCount: {
-    fontSize: '12px',
+    fontSize: '14px',
     color: THEME.text.muted,
     fontFamily: THEME.font.mono,
   },
@@ -276,17 +277,17 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '8px',
   },
   emptyIcon: {
-    fontSize: '24px',
+    fontSize: '28px',
     color: THEME.text.muted,
     opacity: 0.5,
   },
   emptyText: {
-    fontSize: '14px',
+    fontSize: '15px',
     color: THEME.text.muted,
     fontWeight: 500,
   },
   emptyHint: {
-    fontSize: '12px',
+    fontSize: '14px',
     color: THEME.text.muted,
     opacity: 0.6,
   },
@@ -305,7 +306,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '10px',
   },
   statusIcon: {
-    fontSize: '14px',
+    fontSize: '15px',
     lineHeight: '1.4',
     flexShrink: 0,
     marginTop: '1px',
@@ -318,7 +319,7 @@ const styles: Record<string, React.CSSProperties> = {
     minWidth: 0,
   },
   eventName: {
-    fontSize: '14px',
+    fontSize: '15px',
     lineHeight: '1.3',
     color: THEME.text.primary,
     wordBreak: 'break-word' as const,
@@ -326,27 +327,28 @@ const styles: Record<string, React.CSSProperties> = {
   sourceBadge: {
     display: 'inline-flex',
     alignSelf: 'flex-start',
-    fontSize: '9px',
+    fontSize: '10px',
     fontWeight: 600,
-    padding: '2px 6px',
-    borderRadius: '3px',
+    padding: '2px 7px',
+    borderRadius: '4px',
     letterSpacing: '0.06em',
     textTransform: 'uppercase' as const,
+    transition: `all ${ANIMATION.normal} ${ANIMATION.easeOut}`,
   },
   thinkingPreview: {
-    fontSize: '12px',
+    fontSize: '14px',
     color: THEME.text.muted,
     fontFamily: THEME.font.mono,
     lineHeight: '1.4',
-    marginLeft: '24px',
+    marginLeft: '25px',
     borderLeft: `2px solid ${THEME.bg.borderLight}`,
     paddingLeft: '8px',
     opacity: 0.8,
   },
   toolCount: {
-    fontSize: '11px',
+    fontSize: '14px',
     color: THEME.text.muted,
-    marginLeft: '24px',
+    marginLeft: '25px',
   },
 
   // Upcoming section
@@ -367,7 +369,7 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: THEME.bg.border,
   },
   upcomingLabel: {
-    fontSize: '10px',
+    fontSize: '11px',
     fontWeight: 600,
     color: THEME.text.muted,
     textTransform: 'uppercase' as const,
@@ -382,7 +384,7 @@ const styles: Record<string, React.CSSProperties> = {
     transition: `all ${ANIMATION.slow} ${ANIMATION.easeOut}`,
   },
   taskClock: {
-    fontSize: '14px',
+    fontSize: '15px',
     flexShrink: 0,
     marginTop: '1px',
   },
@@ -393,12 +395,12 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '2px',
   },
   taskDescription: {
-    fontSize: '13px',
+    fontSize: '14px',
     color: THEME.text.secondary,
     lineHeight: '1.3',
   },
   taskCountdown: {
-    fontSize: '11px',
+    fontSize: '14px',
     fontFamily: THEME.font.mono,
     fontWeight: 500,
   },

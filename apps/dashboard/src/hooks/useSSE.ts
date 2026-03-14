@@ -150,7 +150,7 @@ function createInitialState(): DashboardState {
     isProcessing: false,
     demoPhase: 'idle',
     error: null,
-    providerConfig: { provider: 'anthropic', model: 'claude-sonnet-4-5' },
+    providerConfig: { provider: 'anthropic', model: 'claude-opus-4-6' },
     demoEventIndex: 0,
   };
 }

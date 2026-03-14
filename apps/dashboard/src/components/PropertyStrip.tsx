@@ -15,10 +15,10 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const SEGMENT_COLORS: Record<string, string> = {
-  checkout: '#3b82f6',
-  cleaning: '#eab308',
-  checkin: '#22c55e',
-  maintenance: '#ef4444',
+  checkout: THEME.tool.sms,
+  cleaning: THEME.status.attention,
+  checkin: THEME.status.normal,
+  maintenance: THEME.status.emergency,
 };
 
 export const PropertyStrip: React.FC<Props> = ({ properties, onPropertyClick }) => {
@@ -51,7 +51,8 @@ const PropertyCard: React.FC<{
     ...styles.card,
     borderColor: hovered ? THEME.bg.borderLight : THEME.bg.border,
     borderLeftColor: statusColor,
-    transform: hovered ? 'translateY(-1px)' : 'translateY(0)',
+    transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
+    boxShadow: hovered ? SHADOW.md : SHADOW.sm,
     ...(hasIssue
       ? {
           animation: property.status === 'emergency'
@@ -123,7 +124,7 @@ const PropertyCard: React.FC<{
       <div style={styles.scheduleBar}>
         {property.schedule.map((seg, i) => (
           <div
-            key={i}
+            key={`${seg.type}-${seg.start}`}
             style={{
               position: 'absolute' as const,
               left: `${seg.start}%`,
@@ -171,19 +172,19 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '1px',
   },
   propertyName: {
-    fontSize: '15px',
+    fontSize: '16px',
     fontWeight: 600,
     color: THEME.text.primary,
     lineHeight: '1.2',
   },
   location: {
-    fontSize: '12px',
+    fontSize: '14px',
     color: THEME.text.muted,
     lineHeight: '1.3',
   },
   statusDot: {
-    width: '8px',
-    height: '8px',
+    width: '10px',
+    height: '10px',
     borderRadius: '50%',
     flexShrink: 0,
   },
@@ -199,40 +200,41 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '2px',
   },
   priceValue: {
-    fontSize: '18px',
+    fontSize: '20px',
     fontWeight: 700,
     color: THEME.text.accent,
+    fontFamily: THEME.font.mono,
   },
   priceUnit: {
-    fontSize: '12px',
+    fontSize: '14px',
     color: THEME.text.muted,
   },
   priceDelta: {
-    fontSize: '12px',
+    fontSize: '14px',
     fontWeight: 600,
     marginLeft: '2px',
   },
   priceDash: {
-    fontSize: '12px',
+    fontSize: '14px',
     color: THEME.text.muted,
   },
   star: {
-    color: '#eab308',
-    fontSize: '13px',
+    color: THEME.status.attention,
+    fontSize: '15px',
     marginRight: '2px',
   },
   ratingValue: {
-    fontSize: '14px',
+    fontSize: '16px',
     fontWeight: 500,
     color: THEME.text.primary,
   },
   reviewCount: {
-    fontSize: '12px',
+    fontSize: '14px',
     color: THEME.text.muted,
     marginLeft: '2px',
   },
   guestFlow: {
-    fontSize: '12px',
+    fontSize: '14px',
     color: THEME.text.secondary,
     fontWeight: 500,
   },
