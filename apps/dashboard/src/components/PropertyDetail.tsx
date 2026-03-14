@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { THEME } from '@apm/shared';
 import { RADIUS, SHADOW, ANIMATION, SPACING } from '../styles/theme';
 import type { PropertyState, ActivityItem } from '../hooks/useSSE';
+import { MiniCalendar } from './MiniCalendar';
 
 interface Props {
   property: PropertyState;
@@ -323,6 +324,12 @@ export const PropertyDetail: React.FC<Props> = ({ property, activities, onBack }
             ))}
           </div>
         </div>
+
+        {/* Calendar Card */}
+        <div style={styles.card}>
+          <div style={styles.cardLabel}>Monthly Calendar</div>
+          <MiniCalendar bookings={property.bookings} />
+        </div>
       </div>
 
       {/* Active Issues */}
@@ -521,7 +528,7 @@ const styles: Record<string, React.CSSProperties> = {
   // ── Card Grid ────────────────────────────────
   cardGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
+    gridTemplateColumns: 'repeat(4, 1fr)',
     gap: '20px',
   },
   card: {

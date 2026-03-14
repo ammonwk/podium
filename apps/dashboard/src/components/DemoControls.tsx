@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { THEME } from '@apm/shared';
+import { THEME, DEMO_EVENTS } from '@apm/shared';
 import { RADIUS, ANIMATION, SHADOW } from '../styles/theme';
 
 interface Props {
@@ -9,37 +9,26 @@ interface Props {
   onResetDemo: () => void;
 }
 
-const TOTAL_EVENTS = 4;
+const TOTAL_EVENTS = DEMO_EVENTS.length;
 
-const ProgressDots: React.FC<{ currentIndex: number }> = ({ currentIndex }) => (
-  <div style={styles.dotsContainer}>
-    <span style={styles.progressLabel}>Event {currentIndex + 1} of {TOTAL_EVENTS}</span>
-    <div style={styles.dotsRow}>
-      {Array.from({ length: TOTAL_EVENTS }, (_, i) => {
-        let dotStyle: React.CSSProperties;
-        if (i < currentIndex) {
-          // completed
-          dotStyle = { ...styles.dot, backgroundColor: THEME.accent.violet };
-        } else if (i === currentIndex) {
-          // current — pulsing
-          dotStyle = {
-            ...styles.dot,
-            backgroundColor: THEME.accent.violet,
-            animation: 'pulseDot 1.2s ease-in-out infinite',
-          };
-        } else {
-          // upcoming — outline only
-          dotStyle = {
-            ...styles.dot,
-            backgroundColor: 'transparent',
-            border: `2px solid ${THEME.accent.violet}`,
-          };
-        }
-        return <div key={i} style={dotStyle} />;
-      })}
+const ProgressBar: React.FC<{ currentIndex: number }> = ({ currentIndex }) => {
+  const sent = Math.min(currentIndex + 1, TOTAL_EVENTS);
+  const pct = (sent / TOTAL_EVENTS) * 100;
+
+  return (
+    <div style={styles.progressContainer}>
+      <span style={styles.progressLabel}>{sent}/{TOTAL_EVENTS} sent</span>
+      <div style={styles.progressTrack}>
+        <div
+          style={{
+            ...styles.progressFill,
+            width: `${pct}%`,
+          }}
+        />
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export const DemoControls: React.FC<Props> = ({
   demoPhase,
@@ -94,7 +83,7 @@ export const DemoControls: React.FC<Props> = ({
         </div>
       )}
 
-      {isRunning && <ProgressDots currentIndex={demoEventIndex} />}
+      {isRunning && <ProgressBar currentIndex={demoEventIndex} />}
 
       <button
         style={getRunButtonStyle()}
@@ -111,7 +100,7 @@ export const DemoControls: React.FC<Props> = ({
           </span>
         )}
         {isSelfManaging && (
-          <span style={{ color: THEME.status.normal }}>✓ Complete</span>
+          <span style={{ color: THEME.status.normal }}>&#10003; Complete</span>
         )}
       </button>
 
@@ -177,29 +166,31 @@ const styles: Record<string, React.CSSProperties> = {
     transition: `all ${ANIMATION.fast} ${ANIMATION.easeOut}`,
     whiteSpace: 'nowrap',
   },
-  dotsContainer: {
+  progressContainer: {
     display: 'flex',
-    flexDirection: 'column',
     alignItems: 'center',
-    gap: '4px',
+    gap: '8px',
   },
   progressLabel: {
     fontSize: '12px',
     color: THEME.text.secondary,
-    fontWeight: 500,
+    fontWeight: 600,
     fontFamily: THEME.font.mono,
     whiteSpace: 'nowrap',
+    minWidth: '56px',
   },
-  dotsRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
+  progressTrack: {
+    width: '80px',
+    height: '6px',
+    borderRadius: '3px',
+    backgroundColor: THEME.bg.border,
+    overflow: 'hidden',
   },
-  dot: {
-    width: '8px',
-    height: '8px',
-    borderRadius: '50%',
-    transition: `all ${ANIMATION.normal} ${ANIMATION.easeOut}`,
+  progressFill: {
+    height: '100%',
+    borderRadius: '3px',
+    background: THEME.accent.gradient,
+    transition: `width ${ANIMATION.fast} ${ANIMATION.easeOut}`,
   },
   selfManagingBadge: {
     display: 'flex',

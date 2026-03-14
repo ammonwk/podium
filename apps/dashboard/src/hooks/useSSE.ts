@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   DEMO_EVENTS,
-  AGENT_CONFIG,
   SSE_EVENTS,
   PROPERTY_IDS,
 } from '@apm/shared';
@@ -32,6 +31,8 @@ export interface EventState {
   startedAt?: string;
   completedAt?: string;
   triggerMessage?: TriggerMessage;
+  conversationId?: string;
+  conversationType?: 'demo' | 'caller';
 }
 
 export interface ToolCallData {
@@ -41,6 +42,7 @@ export interface ToolCallData {
   result: Record<string, unknown>;
   event_name: string;
   timestamp: string;
+  conversationId?: string;
 }
 
 export interface ActivityItem {
@@ -49,6 +51,12 @@ export interface ActivityItem {
   timestamp: string;
   data: Record<string, unknown>;
   eventName: string;
+}
+
+export interface BookingRange {
+  guestName: string;
+  checkIn: string;
+  checkOut: string;
 }
 
 export interface PropertyState {
@@ -63,6 +71,7 @@ export interface PropertyState {
   activeIssues: string[];
   schedule: ScheduleSegment[];
   guestFlow: string;
+  bookings: BookingRange[];
 }
 
 export interface ScheduleSegment {
@@ -94,6 +103,14 @@ export interface DashboardState {
 
 // ─── Initial State ──────────────────────────────────────────────────────────
 
+function bookingDate(daysOffset: number, hours: number): string {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + daysOffset);
+  d.setHours(hours, 0, 0, 0);
+  return d.toISOString();
+}
+
 const INITIAL_PROPERTIES: PropertyState[] = [
   {
     id: PROPERTY_IDS.OCEANVIEW_COTTAGE,
@@ -111,6 +128,10 @@ const INITIAL_PROPERTIES: PropertyState[] = [
       { type: 'checkin', start: 60, end: 80 },
     ],
     guestFlow: 'Sarah → Mike',
+    bookings: [
+      { guestName: 'Sarah Chen', checkIn: bookingDate(-3, 15), checkOut: bookingDate(1, 11) },
+      { guestName: 'Mike Torres', checkIn: bookingDate(1, 15), checkOut: bookingDate(6, 11) },
+    ],
   },
   {
     id: PROPERTY_IDS.MOUNTAIN_LOFT,
@@ -128,6 +149,10 @@ const INITIAL_PROPERTIES: PropertyState[] = [
       { type: 'checkin', start: 60, end: 80 },
     ],
     guestFlow: 'James → Anna',
+    bookings: [
+      { guestName: 'James Wright', checkIn: bookingDate(-3, 15), checkOut: bookingDate(1, 10) },
+      { guestName: 'Anna Park', checkIn: bookingDate(1, 15), checkOut: bookingDate(6, 11) },
+    ],
   },
   {
     id: PROPERTY_IDS.CANYON_HOUSE,
@@ -141,6 +166,9 @@ const INITIAL_PROPERTIES: PropertyState[] = [
     activeIssues: [],
     schedule: [],
     guestFlow: 'Lisa (mid-stay)',
+    bookings: [
+      { guestName: 'Lisa Kim', checkIn: bookingDate(0, 15), checkOut: bookingDate(3, 11) },
+    ],
   },
 ];
 
@@ -149,7 +177,7 @@ function createInitialState(): DashboardState {
     events: [],
     activeEventIndex: -1,
     activities: [],
-    properties: INITIAL_PROPERTIES.map(p => ({ ...p, schedule: [...p.schedule], activeIssues: [...p.activeIssues] })),
+    properties: INITIAL_PROPERTIES.map(p => ({ ...p, schedule: [...p.schedule], activeIssues: [...p.activeIssues], bookings: [...p.bookings] })),
     financials: { revenue: 0, costs: 0, decisions: 0 },
     upcomingTasks: [],
     isProcessing: false,
@@ -214,7 +242,7 @@ export function useSSE(): DashboardState & {
 
     // Listen for each SSE event type
     es.addEventListener(SSE_EVENTS.EVENT_START, (e: MessageEvent) => {
-      const payload: EventStartPayload = JSON.parse(e.data);
+      const payload = JSON.parse(e.data) as EventStartPayload & { conversation_id?: string; conversation_type?: 'demo' | 'caller' };
       setState(prev => {
         // Attach trigger message if we stored one for this event
         const trigger = pendingTriggersRef.current.get(payload.event_name);
@@ -230,6 +258,8 @@ export function useSSE(): DashboardState & {
           toolCalls: [],
           startedAt: new Date().toISOString(),
           triggerMessage: trigger,
+          conversationId: payload.conversation_id,
+          conversationType: payload.conversation_type,
         };
         // Check if this event was already queued
         const existingIdx = prev.events.findIndex(
@@ -239,7 +269,14 @@ export function useSSE(): DashboardState & {
         let newIndex: number;
         if (existingIdx >= 0) {
           newEvents = prev.events.map((ev, i) =>
-            i === existingIdx ? { ...ev, status: 'active' as const, startedAt: new Date().toISOString(), triggerMessage: trigger || ev.triggerMessage } : ev
+            i === existingIdx ? {
+              ...ev,
+              status: 'active' as const,
+              startedAt: new Date().toISOString(),
+              triggerMessage: trigger || ev.triggerMessage,
+              conversationId: payload.conversation_id || ev.conversationId,
+              conversationType: payload.conversation_type || ev.conversationType,
+            } : ev
           );
           newIndex = existingIdx;
         } else {
@@ -266,23 +303,25 @@ export function useSSE(): DashboardState & {
     });
 
     es.addEventListener(SSE_EVENTS.EVENT_DONE, (e: MessageEvent) => {
-      const payload: EventDonePayload = JSON.parse(e.data);
+      const payload = JSON.parse(e.data) as EventDonePayload & { conversation_id?: string };
       setState(prev => {
         const newEvents = prev.events.map(ev =>
           ev.name === payload.event_name && ev.status === 'active'
             ? { ...ev, status: 'done' as const, completedAt: new Date().toISOString() }
             : ev
         );
+        // isProcessing is true as long as ANY event is still active
+        const stillProcessing = newEvents.some(ev => ev.status === 'active');
         return {
           ...prev,
           events: newEvents,
-          isProcessing: false,
+          isProcessing: stillProcessing,
         };
       });
     });
 
     es.addEventListener(SSE_EVENTS.EVENT_QUEUED, (e: MessageEvent) => {
-      const payload: EventQueuedPayload = JSON.parse(e.data);
+      const payload = JSON.parse(e.data) as EventQueuedPayload & { conversation_id?: string; conversation_type?: 'demo' | 'caller' };
       setState(prev => {
         // Don't add if already exists
         if (prev.events.some(ev => ev.name === payload.event_name)) {
@@ -294,6 +333,8 @@ export function useSSE(): DashboardState & {
           status: 'queued',
           thinkingText: '',
           toolCalls: [],
+          conversationId: payload.conversation_id,
+          conversationType: payload.conversation_type,
         };
         return {
           ...prev,
@@ -303,7 +344,7 @@ export function useSSE(): DashboardState & {
     });
 
     es.addEventListener(SSE_EVENTS.THINKING, (e: MessageEvent) => {
-      const payload: ThinkingPayload = JSON.parse(e.data);
+      const payload = JSON.parse(e.data) as ThinkingPayload & { conversation_id?: string };
       setState(prev => {
         const newEvents = prev.events.map(ev =>
           ev.name === payload.event_name && ev.status === 'active'
@@ -315,7 +356,7 @@ export function useSSE(): DashboardState & {
     });
 
     es.addEventListener(SSE_EVENTS.TOOL_CALL, (e: MessageEvent) => {
-      const payload: ToolCallPayload = JSON.parse(e.data);
+      const payload = JSON.parse(e.data) as ToolCallPayload & { conversation_id?: string };
       const toolCall: ToolCallData = {
         id: `tc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
         tool_name: payload.tool_name,
@@ -323,6 +364,7 @@ export function useSSE(): DashboardState & {
         result: payload.result,
         event_name: payload.event_name,
         timestamp: new Date().toISOString(),
+        conversationId: payload.conversation_id,
       };
 
       setState(prev => {
@@ -525,7 +567,10 @@ export function useSSE(): DashboardState & {
   const runDemo = useCallback(async () => {
     setState(prev => ({ ...prev, demoPhase: 'running', demoEventIndex: 0 }));
     const serverUrl = getServerUrl();
+    const BURST_DELAY_MS = 250; // stagger events by 250ms for a rapid burst
 
+    // Fire all events rapidly — each goes to its own lane via phone number,
+    // so they process concurrently on the server
     for (let i = 0; i < DEMO_EVENTS.length; i++) {
       setState(prev => ({ ...prev, demoEventIndex: i }));
 
@@ -566,28 +611,21 @@ export function useSSE(): DashboardState & {
         pendingTriggersRef.current.set(DEMO_EVENTS[i].name, triggerMsg);
       }
 
-      try {
-        await fetch(`${serverUrl}/api/events`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(DEMO_EVENTS[i]),
-        });
-      } catch (err) {
-        console.error('Failed to send demo event:', err);
-      }
+      // Fire-and-forget — don't await the server response before sending the next
+      fetch(`${serverUrl}/api/events`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(DEMO_EVENTS[i]),
+      }).catch(err => console.error('Failed to send demo event:', err));
 
-      // Wait between events (except after last)
+      // Short stagger between sends so the dashboard can show them arriving
       if (i < DEMO_EVENTS.length - 1) {
-        await new Promise(resolve =>
-          setTimeout(resolve, AGENT_CONFIG.DEMO_EVENT_PAUSE_MS)
-        );
-        // Also wait for current event to finish processing
-        await waitForProcessingDone(setState);
+        await new Promise(resolve => setTimeout(resolve, BURST_DELAY_MS));
       }
     }
 
-    // After all 4 events, wait for final processing then go self-managing
-    await waitForProcessingDone(setState);
+    // All events sent — wait for everything to finish processing, then go self-managing
+    await waitForAllEventsDone(setState);
     setState(prev => ({ ...prev, demoPhase: 'self-managing' }));
   }, []);
 
@@ -641,22 +679,26 @@ export function useSSE(): DashboardState & {
   };
 }
 
-// Helper to wait for processing to be done
-function waitForProcessingDone(
+// Helper to wait until all demo events have finished processing.
+// With concurrent lanes, isProcessing can toggle rapidly, so instead
+// we check that every known event has reached 'done' status.
+function waitForAllEventsDone(
   setState: React.Dispatch<React.SetStateAction<DashboardState>>
 ): Promise<void> {
   return new Promise(resolve => {
+    const totalExpected = DEMO_EVENTS.length;
     const check = () => {
       setState(prev => {
-        if (!prev.isProcessing) {
+        const doneCount = prev.events.filter(ev => ev.status === 'done').length;
+        if (doneCount >= totalExpected) {
           setTimeout(resolve, 500);
           return prev;
         }
-        setTimeout(check, 300);
+        setTimeout(check, 500);
         return prev;
       });
     };
-    // Start checking after a short delay to ensure event_start has fired
-    setTimeout(check, 1000);
+    // Start checking after a delay to let the first events get queued
+    setTimeout(check, 2000);
   });
 }

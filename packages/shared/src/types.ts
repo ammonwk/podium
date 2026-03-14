@@ -402,6 +402,7 @@ export interface ProviderConfig {
 
 export interface DemoEvent {
   type: 'guest_message' | 'market_alert';
+  name: string;
   from?: string;
   body?: string;
   alert_type?: string;
