@@ -43,71 +43,80 @@ export class OpenRouterClient implements LLMClient {
       };
     }
 
-    const stream = await this.client.chat.completions.create(params);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60_000);
+
+    const stream = await this.client.chat.completions.create(params, {
+      signal: controller.signal,
+    });
 
     const activeToolCalls = new Map<
       number,
       { id: string; name: string; argumentsJson: string }
     >();
 
-    for await (const chunk of stream) {
-      const choice = chunk.choices[0];
-      if (!choice) continue;
+    try {
+      for await (const chunk of stream) {
+        const choice = chunk.choices[0];
+        if (!choice) continue;
 
-      const delta = choice.delta;
+        const delta = choice.delta;
 
-      if (delta?.content) {
-        yield { type: 'text', text: delta.content };
-      }
+        if (delta?.content) {
+          yield { type: 'text', text: delta.content };
+        }
 
-      if (delta?.tool_calls) {
-        for (const tc of delta.tool_calls) {
-          if (tc.id) {
-            activeToolCalls.set(tc.index, {
-              id: tc.id,
-              name: tc.function?.name || '',
-              argumentsJson: tc.function?.arguments || '',
-            });
-            yield {
-              type: 'tool_use_start',
-              tool_call: {
+        if (delta?.tool_calls) {
+          for (const tc of delta.tool_calls) {
+            if (tc.id) {
+              activeToolCalls.set(tc.index, {
                 id: tc.id,
                 name: tc.function?.name || '',
-                input: {},
-              },
-            };
-          } else {
-            const existing = activeToolCalls.get(tc.index);
-            if (existing && tc.function?.arguments) {
-              existing.argumentsJson += tc.function.arguments;
+                argumentsJson: tc.function?.arguments || '',
+              });
+              yield {
+                type: 'tool_use_start',
+                tool_call: {
+                  id: tc.id,
+                  name: tc.function?.name || '',
+                  input: {},
+                },
+              };
+            } else {
+              const existing = activeToolCalls.get(tc.index);
+              if (existing && tc.function?.arguments) {
+                existing.argumentsJson += tc.function.arguments;
+              }
             }
           }
         }
-      }
 
-      if (choice.finish_reason) {
-        for (const [, tc] of activeToolCalls) {
-          let input: Record<string, unknown> = {};
-          try {
-            input = tc.argumentsJson ? JSON.parse(tc.argumentsJson) : {};
-          } catch {
-            console.error(
-              `[OPENROUTER] Failed to parse tool arguments: ${tc.argumentsJson}`,
-            );
+        if (choice.finish_reason) {
+          for (const [, tc] of activeToolCalls) {
+            let input: Record<string, unknown> = {};
+            try {
+              input = tc.argumentsJson ? JSON.parse(tc.argumentsJson) : {};
+            } catch {
+              console.error(
+                `[OPENROUTER] Failed to parse tool arguments: ${tc.argumentsJson}`,
+              );
+            }
+            yield {
+              type: 'tool_use_done',
+              tool_call: { id: tc.id, name: tc.name, input },
+            };
           }
+          activeToolCalls.clear();
+
           yield {
-            type: 'tool_use_done',
-            tool_call: { id: tc.id, name: tc.name, input },
+            type: 'done',
+            stop_reason:
+              choice.finish_reason === 'tool_calls' ? 'tool_use' : 'end_turn',
           };
         }
-        activeToolCalls.clear();
-
-        yield {
-          type: 'done',
-          stop_reason:
-            choice.finish_reason === 'tool_calls' ? 'tool_use' : 'end_turn',
-        };
       }
+    } finally {
+      clearTimeout(timeout);
     }
   }
 }

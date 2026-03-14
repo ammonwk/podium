@@ -298,7 +298,7 @@ export const BOOKING_TIMES = {
 
 export const AGENT_CONFIG = {
   MAX_ITERATIONS: 10,
-  CHAT_MAX_ITERATIONS: 5,
+  CHAT_MAX_ITERATIONS: 25,
   MAX_TOKENS: 16000,
   SCHEDULE_DELAY_MULTIPLIER: 500,   // ms per delay_minute (30 min → 15 sec)
   MAX_PENDING_TASKS: 10,
