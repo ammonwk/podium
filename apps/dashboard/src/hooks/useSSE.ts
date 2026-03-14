@@ -616,8 +616,7 @@ export function useSSE(): DashboardState & {
       });
       if (resp.ok) {
         const data = await resp.json();
-        const config = data.provider || data;
-        const providerConfig = { provider: config.provider, model: config.model };
+        const providerConfig = { provider: data.provider, model: data.model };
         localStorage.setItem('providerConfig', JSON.stringify(providerConfig));
         setState(prev => ({
           ...prev,

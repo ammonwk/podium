@@ -1,10 +1,12 @@
 import type { EditBookingInput, EditBookingResult } from '@apm/shared';
 import { PropertyModel, BookingModel, ScheduleEventModel } from '../shared/db.js';
+import { normalizePhone } from '../shared/phone-utils.js';
 
 export async function executeEditBooking(
   input: EditBookingInput,
 ): Promise<EditBookingResult> {
-  const { guest_phone, property_id, new_check_in, new_check_out, new_property_id } = input;
+  const { property_id, new_check_in, new_check_out, new_property_id } = input;
+  const guest_phone = normalizePhone(input.guest_phone) || input.guest_phone;
 
   // Find booking(s) by phone
   const query: Record<string, unknown> = {

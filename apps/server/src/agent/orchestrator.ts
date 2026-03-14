@@ -1,20 +1,7 @@
-import type { LLMMessage, LLMContentBlock, LLMStreamEvent } from '@apm/shared';
-import { AGENT_CONFIG, TOOL_NAMES } from '@apm/shared';
+import type { LLMMessage, LLMContentBlock } from '@apm/shared';
 import { getActiveClient } from '../shared/llm/client.js';
-import { emitSSE } from '../shared/sse.js';
-import type { LaneContext } from '../shared/sse.js';
-import { buildSystemPrompt } from './system-prompt.js';
-import { toolDefinitions } from '../tools/definitions.js';
-import { executeSendSms } from '../tools/send-sms.js';
-import { executeCreateWorkOrder } from '../tools/create-work-order.js';
-import { executeAdjustPrice } from '../tools/adjust-price.js';
-import { executeLogDecision } from '../tools/log-decision.js';
-import { executeGetMarketData } from '../tools/get-market-data.js';
-import { executeUpdateSchedule } from '../tools/update-schedule.js';
-import { executeScheduleTask } from '../tools/schedule-task.js';
-import { executeCreateBooking } from '../tools/create-booking.js';
-import { executeEditBooking } from '../tools/edit-booking.js';
-import { executeGetPropertyStatus } from '../tools/get-property-status.js';
+import { executeTool } from '../tools/executor.js';
+import type { LoopContext } from './types.js';
 
 interface ToolCall {
   id: string;
@@ -22,107 +9,40 @@ interface ToolCall {
   input: Record<string, unknown>;
 }
 
-async function executeTool(
-  name: string,
-  input: Record<string, unknown>,
-): Promise<Record<string, unknown>> {
-  switch (name) {
-    case TOOL_NAMES.SEND_SMS:
-      return (await executeSendSms(input as any)) as unknown as Record<string, unknown>;
-    case TOOL_NAMES.CREATE_WORK_ORDER:
-      return (await executeCreateWorkOrder(input as any)) as unknown as Record<
-        string,
-        unknown
-      >;
-    case TOOL_NAMES.ADJUST_PRICE:
-      return (await executeAdjustPrice(input as any)) as unknown as Record<
-        string,
-        unknown
-      >;
-    case TOOL_NAMES.LOG_DECISION:
-      return (await executeLogDecision(input as any)) as unknown as Record<
-        string,
-        unknown
-      >;
-    case TOOL_NAMES.GET_MARKET_DATA:
-      return (await executeGetMarketData(input as any)) as unknown as Record<
-        string,
-        unknown
-      >;
-    case TOOL_NAMES.UPDATE_SCHEDULE:
-      return (await executeUpdateSchedule(input as any)) as unknown as Record<
-        string,
-        unknown
-      >;
-    case TOOL_NAMES.SCHEDULE_TASK:
-      return (await executeScheduleTask(input as any)) as unknown as Record<
-        string,
-        unknown
-      >;
-    case TOOL_NAMES.CREATE_BOOKING:
-      return (await executeCreateBooking(input as any)) as unknown as Record<
-        string,
-        unknown
-      >;
-    case TOOL_NAMES.EDIT_BOOKING:
-      return (await executeEditBooking(input as any)) as unknown as Record<
-        string,
-        unknown
-      >;
-    case TOOL_NAMES.GET_PROPERTY_STATUS:
-      return (await executeGetPropertyStatus(input as any)) as unknown as Record<
-        string,
-        unknown
-      >;
-    default:
-      throw new Error(`Unknown tool: ${name}`);
-  }
-}
-
-export async function runAgentLoop(
+export async function runLoop(
   conversationHistory: LLMMessage[],
-  eventName: string,
-  source: 'human' | 'system' | 'self-scheduled',
-  laneContext?: LaneContext,
+  context: LoopContext,
 ): Promise<void> {
   const client = getActiveClient();
-  const system = buildSystemPrompt();
+  const allowedToolNames = new Set(context.tools.map((t) => t.name));
 
   console.log(
-    `[AGENT] Starting loop for "${eventName}" (source: ${source}) using ${client.provider}/${client.model}`,
+    `[${context.label}] Starting loop for "${context.eventName}" using ${client.provider}/${client.model}`,
   );
 
-  emitSSE('event_start', {
-    event_name: eventName,
-    source,
-    description: `Processing: ${eventName}`,
-  }, laneContext);
+  context.emitter.onStart(context.eventName, context.label);
 
   let iteration = 0;
 
-  while (iteration < AGENT_CONFIG.MAX_ITERATIONS) {
+  while (iteration < context.maxIterations) {
     iteration++;
-    console.log(`[AGENT] Iteration ${iteration}/${AGENT_CONFIG.MAX_ITERATIONS}`);
+    console.log(`[${context.label}] Iteration ${iteration}/${context.maxIterations}`);
 
-    // Collect the full response from the streaming call
     const assistantBlocks: LLMContentBlock[] = [];
     const pendingToolCalls: ToolCall[] = [];
     let fullText = '';
-    let stopReason = '';
 
     try {
-      const stream = client.stream(system, conversationHistory, toolDefinitions);
+      const stream = client.stream(context.systemPrompt, conversationHistory, context.tools);
 
       for await (const event of stream) {
         switch (event.type) {
           case 'thinking_delta': {
-            // Stream thinking text to dashboard for live display
             const thinkingText = event.text || '';
-            emitSSE('thinking', { text: thinkingText, event_name: eventName }, laneContext);
+            context.emitter.onThinkingDelta(thinkingText);
             break;
           }
           case 'thinking_done': {
-            // Capture complete thinking block (with signature) for conversation history
             if (event.thinking_block) {
               assistantBlocks.push({
                 type: 'thinking',
@@ -135,12 +55,10 @@ export async function runAgentLoop(
           case 'text': {
             const text = event.text || '';
             fullText += text;
-            // Emit text to dashboard as well
-            emitSSE('thinking', { text, event_name: eventName }, laneContext);
+            context.emitter.onTextDelta(text);
             break;
           }
           case 'tool_use_start': {
-            // Tool call starting — we'll get the full input on tool_use_done
             break;
           }
           case 'tool_use_done': {
@@ -154,16 +72,13 @@ export async function runAgentLoop(
             break;
           }
           case 'done': {
-            stopReason = event.stop_reason || 'end_turn';
             break;
           }
         }
       }
     } catch (err: any) {
-      console.error('[AGENT] LLM stream error:', err);
-      emitSSE('error', {
-        message: `LLM error: ${err.message || 'Unknown error'}`,
-      }, laneContext);
+      console.error(`[${context.label}] LLM stream error:`, err);
+      context.emitter.onError(`LLM error: ${err.message || 'Unknown error'}`);
       break;
     }
 
@@ -182,7 +97,7 @@ export async function runAgentLoop(
 
     // If we got nothing at all, something went wrong
     if (assistantBlocks.length === 0) {
-      console.warn('[AGENT] Empty response from LLM, breaking loop');
+      console.warn(`[${context.label}] Empty response from LLM, breaking loop`);
       break;
     }
 
@@ -194,7 +109,7 @@ export async function runAgentLoop(
 
     // If no tool calls, we're done
     if (pendingToolCalls.length === 0) {
-      console.log('[AGENT] No tool calls, loop complete');
+      console.log(`[${context.label}] No tool calls, loop complete`);
       break;
     }
 
@@ -202,25 +117,26 @@ export async function runAgentLoop(
     const toolResultBlocks: LLMContentBlock[] = [];
 
     for (const tc of pendingToolCalls) {
-      console.log(`[AGENT] Executing tool: ${tc.name}`);
+      console.log(`[${context.label}] Executing tool: ${tc.name}`);
       let result: Record<string, unknown>;
       let isError = false;
 
-      try {
-        result = await executeTool(tc.name, tc.input);
-      } catch (err: any) {
-        console.error(`[TOOL:${tc.name}] Error:`, err.message);
-        result = { error: err.message };
+      // Guard: reject tools not in the allowed set
+      if (!allowedToolNames.has(tc.name)) {
+        console.warn(`[${context.label}] Tool "${tc.name}" not allowed in this context`);
+        result = { error: `Tool "${tc.name}" is not available in this context.` };
         isError = true;
+      } else {
+        try {
+          result = await executeTool(tc.name, tc.input);
+        } catch (err: any) {
+          console.error(`[${context.label}:${tc.name}] Error:`, err.message);
+          result = { error: err.message };
+          isError = true;
+        }
       }
 
-      // Emit SSE for dashboard
-      emitSSE('tool_call', {
-        tool_name: tc.name,
-        input: tc.input,
-        result,
-        event_name: eventName,
-      }, laneContext);
+      context.emitter.onToolCall(tc.name, tc.input, result, isError);
 
       toolResultBlocks.push({
         type: 'tool_result',
@@ -235,18 +151,14 @@ export async function runAgentLoop(
       role: 'user',
       content: toolResultBlocks,
     });
-
-    // If stop reason was end_turn even though there were tool calls, still loop
-    // (the model might have text + tool calls in one response)
-    // The loop condition at the top will handle max iterations
   }
 
-  if (iteration >= AGENT_CONFIG.MAX_ITERATIONS) {
+  if (iteration >= context.maxIterations) {
     console.warn(
-      `[AGENT] Hit max iterations (${AGENT_CONFIG.MAX_ITERATIONS}) for "${eventName}"`,
+      `[${context.label}] Hit max iterations (${context.maxIterations}) for "${context.eventName}"`,
     );
   }
 
-  emitSSE('event_done', { event_name: eventName }, laneContext);
-  console.log(`[AGENT] Loop complete for "${eventName}" (${iteration} iterations)`);
+  context.emitter.onDone();
+  console.log(`[${context.label}] Loop complete for "${context.eventName}" (${iteration} iterations)`);
 }

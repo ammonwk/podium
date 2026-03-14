@@ -1,4 +1,5 @@
 import type { LLMToolDefinition } from '@apm/shared';
+import { TOOL_NAMES } from '@apm/shared';
 
 export const toolDefinitions: LLMToolDefinition[] = [
   {
@@ -271,6 +272,22 @@ export const toolDefinitions: LLMToolDefinition[] = [
     },
   },
   {
+    name: 'lookup_guest',
+    description:
+      'Look up a guest\'s active or upcoming booking(s) by their phone number. Returns booking details including property, dates, and status. Use this when a guest provides their phone number and wants to check their reservation.',
+    input_schema: {
+      type: 'object',
+      required: ['guest_phone'],
+      properties: {
+        guest_phone: {
+          type: 'string',
+          description:
+            'Guest phone number in E.164 format (e.g., +13853350806). Normalize before calling.',
+        },
+      },
+    },
+  },
+  {
     name: 'get_property_status',
     description:
       'Get current status of one or all properties including bookings, schedule events, and available date windows. Returns property details, active/upcoming bookings, scheduled events, and open windows for booking.',
@@ -296,3 +313,16 @@ export const toolDefinitions: LLMToolDefinition[] = [
     },
   },
 ];
+
+export const ALL_TOOLS = toolDefinitions;
+
+export const CHAT_BOOKING_TOOLS: LLMToolDefinition[] = toolDefinitions.filter((t) =>
+  [
+    TOOL_NAMES.CREATE_BOOKING,
+    TOOL_NAMES.EDIT_BOOKING,
+    TOOL_NAMES.GET_PROPERTY_STATUS,
+    TOOL_NAMES.LOOKUP_GUEST,
+  ].includes(t.name as any),
+);
+
+export const NO_TOOLS: LLMToolDefinition[] = [];

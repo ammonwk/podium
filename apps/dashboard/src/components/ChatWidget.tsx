@@ -1,7 +1,19 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { THEME } from '@apm/shared';
+import { THEME, TOOL_COLORS } from '@apm/shared';
 import type { ChatRole, ChatMessage } from '@apm/shared';
 import { RADIUS, SHADOW, ANIMATION } from '../styles/theme';
+
+interface ToolCallData {
+  tool_name: string;
+  input: Record<string, unknown>;
+  result: Record<string, unknown>;
+  is_error: boolean;
+}
+
+// Extended local message type to support tool call bubbles
+interface DisplayMessage extends ChatMessage {
+  toolCall?: ToolCallData;
+}
 
 function formatBold(text: string): React.ReactNode {
   const parts = text.split(/(\*\*.*?\*\*)/g);
@@ -12,6 +24,38 @@ function formatBold(text: string): React.ReactNode {
   );
 }
 
+function formatToolName(name: string): string {
+  return name.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function summarizeToolResult(toolName: string, result: Record<string, unknown>, isError: boolean): string {
+  if (isError) {
+    return `Error: ${result.error || 'Unknown error'}`;
+  }
+
+  // Provide compact summaries for known tool types
+  if (toolName === 'lookup_guest') {
+    if (!result.found) return 'No bookings found';
+    const bookings = result.bookings as Array<Record<string, unknown>>;
+    return bookings.map((b) => `${b.guest_name} @ ${b.property_name} (${b.status})`).join(', ');
+  }
+  if (toolName === 'create_booking') {
+    return `Booked ${result.property_name} for ${result.guest_name} (${result.nights} nights, $${result.total_estimate})`;
+  }
+  if (toolName === 'edit_booking') {
+    return `Updated: ${result.changes}`;
+  }
+  if (toolName === 'get_property_status') {
+    const props = result.properties as Array<Record<string, unknown>> | undefined;
+    if (props) return `${props.length} propert${props.length === 1 ? 'y' : 'ies'} returned`;
+    return 'Property status retrieved';
+  }
+
+  // Fallback: show first few keys
+  const keys = Object.keys(result).slice(0, 3);
+  return keys.map((k) => `${k}: ${JSON.stringify(result[k])}`).join(', ');
+}
+
 const ROLES: { key: ChatRole; label: string }[] = [
   { key: 'property_owner', label: 'Owner' },
   { key: 'current_occupant', label: 'Occupant' },
@@ -20,11 +64,12 @@ const ROLES: { key: ChatRole; label: string }[] = [
 
 export const ChatWidget: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [role, setRole] = useState<ChatRole>('interested_person');
   const [isStreaming, setIsStreaming] = useState(false);
   const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
+  const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -60,21 +105,59 @@ export const ChatWidget: React.FC = () => {
 
       setMessages((prev) => {
         const last = prev[prev.length - 1];
-        if (last && last.role === 'assistant' && isStreamingMsg(last)) {
+        if (last && last.role === 'assistant' && !last.toolCall && isStreamingMsg(last)) {
           return [...prev.slice(0, -1), { ...last, content: currentText }];
         }
-        return prev;
+        // If the last message is a tool call or doesn't exist, create a new streaming message
+        return [
+          ...prev,
+          { id: `streaming-${crypto.randomUUID()}`, role: 'assistant', content: currentText, timestamp: new Date().toISOString() },
+        ];
       });
+    });
+
+    es.addEventListener('chat_tool_call', (e) => {
+      const data: ToolCallData = JSON.parse(e.data);
+
+      // Insert tool call bubble before the current streaming assistant message
+      setMessages((prev) => {
+        const toolMsg: DisplayMessage = {
+          id: `tool-${crypto.randomUUID()}`,
+          role: 'assistant',
+          content: '',
+          timestamp: new Date().toISOString(),
+          toolCall: data,
+        };
+
+        // Find the current streaming message — remove it, insert tool call, then re-add streaming
+        const last = prev[prev.length - 1];
+        if (last && last.role === 'assistant' && !last.toolCall && isStreamingMsg(last)) {
+          return [...prev.slice(0, -1), toolMsg, last];
+        }
+        return [...prev, toolMsg];
+      });
+
+      // Reset streaming text since the AI will produce new text after the tool call
+      streamingTextRef.current = '';
     });
 
     es.addEventListener('chat_done', () => {
       setIsStreaming(false);
       setMessages((prev) => {
-        const last = prev[prev.length - 1];
-        if (last && last.role === 'assistant') {
-          return [...prev.slice(0, -1), { ...last, id: last.id.replace('streaming-', '') }];
+        // Remove empty trailing streaming messages and finalize IDs
+        const result: DisplayMessage[] = [];
+        for (const msg of prev) {
+          if (isStreamingMsg(msg) && !msg.content.trim() && !msg.toolCall) {
+            // Drop empty streaming messages
+            continue;
+          }
+          if (msg.role === 'assistant' && isStreamingMsg(msg)) {
+            result.push({ ...msg, id: msg.id.replace('streaming-', '') });
+          } else {
+            result.push(msg);
+          }
         }
-        return prev;
+        return result;
       });
     });
 
@@ -84,13 +167,13 @@ export const ChatWidget: React.FC = () => {
     };
   }, [isOpen, sessionId]);
 
-  const isStreamingMsg = (msg: ChatMessage) => msg.id.startsWith('streaming-');
+  const isStreamingMsg = (msg: DisplayMessage) => msg.id.startsWith('streaming-');
 
   const sendMessage = useCallback(async () => {
     const text = inputText.trim();
     if (!text || isStreaming) return;
 
-    const userMsg: ChatMessage = {
+    const userMsg: DisplayMessage = {
       id: crypto.randomUUID(),
       role: 'user',
       content: text,
@@ -136,6 +219,85 @@ export const ChatWidget: React.FC = () => {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [isOpen]);
+
+  const toggleToolExpanded = useCallback((id: string) => {
+    setExpandedTools((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const renderMessage = (msg: DisplayMessage) => {
+    // Tool call bubble
+    if (msg.toolCall) {
+      const { tool_name, input, result, is_error } = msg.toolCall;
+      const color = TOOL_COLORS[tool_name] || THEME.text.secondary;
+      const isExpanded = expandedTools.has(msg.id);
+      return (
+        <div key={msg.id} style={{ ...styles.messageBubbleRow, justifyContent: 'flex-start' }}>
+          <div
+            style={styles.toolBubble}
+            onClick={() => toggleToolExpanded(msg.id)}
+          >
+            <div style={styles.toolHeader}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+              <span style={{ ...styles.toolName, color }}>{formatToolName(tool_name)}</span>
+              <svg
+                width="12" height="12" viewBox="0 0 24 24" fill="none"
+                stroke={THEME.text.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                style={{ marginLeft: 'auto', flexShrink: 0, transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s ease' }}
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </div>
+            <div style={{
+              ...styles.toolResult,
+              color: is_error ? THEME.status.emergency : THEME.text.secondary,
+            }}>
+              {summarizeToolResult(tool_name, result, is_error)}
+            </div>
+            {isExpanded && (
+              <div style={styles.toolDetails}>
+                <div style={styles.toolDetailSection}>
+                  <div style={styles.toolDetailLabel}>Input</div>
+                  <pre style={styles.toolDetailPre}>{JSON.stringify(input, null, 2)}</pre>
+                </div>
+                <div style={styles.toolDetailSection}>
+                  <div style={styles.toolDetailLabel}>Output</div>
+                  <pre style={styles.toolDetailPre}>{JSON.stringify(result, null, 2)}</pre>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // Regular message bubble
+    return (
+      <div
+        key={msg.id}
+        style={{
+          ...styles.messageBubbleRow,
+          justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
+        }}
+      >
+        <div
+          style={{
+            ...styles.messageBubble,
+            ...(msg.role === 'user' ? styles.userBubble : styles.assistantBubble),
+          }}
+        >
+          {msg.content ? formatBold(msg.content.replace(/^\n+/, '')) : (isStreamingMsg(msg) ? '...' : '')}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <>
@@ -189,24 +351,7 @@ export const ChatWidget: React.FC = () => {
                 Send a message to start chatting as <strong>{ROLES.find(r => r.key === role)?.label}</strong>
               </div>
             )}
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                style={{
-                  ...styles.messageBubbleRow,
-                  justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                }}
-              >
-                <div
-                  style={{
-                    ...styles.messageBubble,
-                    ...(msg.role === 'user' ? styles.userBubble : styles.assistantBubble),
-                  }}
-                >
-                  {msg.content ? formatBold(msg.content.replace(/^\n+/, '')) : (isStreamingMsg(msg) ? '...' : '')}
-                </div>
-              </div>
-            ))}
+            {messages.map(renderMessage)}
             <div ref={messagesEndRef} />
           </div>
 
@@ -372,6 +517,67 @@ const styles: Record<string, React.CSSProperties> = {
     color: THEME.text.primary,
     border: `1px solid ${THEME.bg.border}`,
     borderBottomLeftRadius: '4px',
+  },
+  toolBubble: {
+    maxWidth: '85%',
+    padding: '8px 12px',
+    borderRadius: RADIUS.md,
+    backgroundColor: THEME.bg.sidebar,
+    border: `1px dashed ${THEME.bg.border}`,
+    borderBottomLeftRadius: '4px',
+    fontFamily: THEME.font.sans,
+    cursor: 'pointer',
+    transition: `background-color ${ANIMATION.fast} ${ANIMATION.easeOut}`,
+  },
+  toolHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    marginBottom: '4px',
+  },
+  toolName: {
+    fontSize: '12px',
+    fontWeight: 600,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.5px',
+  },
+  toolResult: {
+    fontSize: '12px',
+    lineHeight: 1.4,
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-word',
+  },
+  toolDetails: {
+    marginTop: '8px',
+    paddingTop: '8px',
+    borderTop: `1px solid ${THEME.bg.border}`,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '8px',
+  },
+  toolDetailSection: {},
+  toolDetailLabel: {
+    fontSize: '10px',
+    fontWeight: 600,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.5px',
+    color: THEME.text.muted,
+    marginBottom: '4px',
+  },
+  toolDetailPre: {
+    fontSize: '11px',
+    lineHeight: 1.4,
+    fontFamily: THEME.font.mono,
+    backgroundColor: THEME.bg.primary,
+    border: `1px solid ${THEME.bg.border}`,
+    borderRadius: RADIUS.sm,
+    padding: '6px 8px',
+    margin: 0,
+    whiteSpace: 'pre-wrap' as const,
+    wordBreak: 'break-all' as const,
+    maxHeight: '150px',
+    overflowY: 'auto' as const,
+    color: THEME.text.primary,
   },
   inputArea: {
     display: 'flex',

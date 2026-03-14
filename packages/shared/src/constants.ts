@@ -41,6 +41,7 @@ export const TOOL_NAMES = {
   CREATE_BOOKING: 'create_booking',
   EDIT_BOOKING: 'edit_booking',
   GET_PROPERTY_STATUS: 'get_property_status',
+  LOOKUP_GUEST: 'lookup_guest',
 } as const;
 
 // ─── SSE Event Names ─────────────────────────────────────────────────────────
@@ -84,6 +85,7 @@ export const TOOL_COLORS: Record<string, string> = {
   create_booking: '#2563EB',
   edit_booking: '#7C3AED',
   get_property_status: '#10B981',
+  lookup_guest: '#8B5CF6',
 };
 
 // ─── Dashboard Theme ─────────────────────────────────────────────────────────
@@ -161,6 +163,7 @@ export const DEMO_EVENTS = [
 
 export const AGENT_CONFIG = {
   MAX_ITERATIONS: 10,
+  CHAT_MAX_ITERATIONS: 5,
   MAX_TOKENS: 16000,
   SCHEDULE_DELAY_MULTIPLIER: 500,   // ms per delay_minute (30 min → 15 sec)
   MAX_PENDING_TASKS: 10,

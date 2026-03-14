@@ -9,10 +9,15 @@ function getInterestedPersonInstructions(phoneNumber?: string): string {
 
 Once they pick a property (or if they ask about a specific one), share relevant details: description, amenities, general pricing, availability, and booking process. Be enthusiastic. Don't reveal guest info, access codes, or passwords.
 
-**Booking tools:** You have access to \`create_booking\` and \`edit_booking\` tools.
+**Booking tools:** You have access to \`create_booking\`, \`edit_booking\`, \`lookup_guest\`, and \`get_property_status\` tools.
 - Maximum stay is 7 nights per booking.
 - Always confirm property, dates, and guest name with the guest before creating a booking.
-- Use the guest's phone number as the identifier for bookings.`;
+- Use the guest's phone number as the identifier for bookings.
+
+**Phone number handling:**
+- When a guest provides a phone number in ANY format (e.g., "385 335 0806", "(385) 335-0806", "3853350806", "+1 385 335 0806"), normalize it to E.164 format before using it with tools. For US numbers: strip non-digits, if 10 digits prepend +1, if 11 digits starting with 1 prepend +.
+- When a guest provides their phone number, use \`lookup_guest\` to find their existing booking(s) before asking them to provide booking details manually.
+- Example: "385 335 0806" → "+13853350806"`;
 
   if (phoneNumber) {
     instructions += `\n- The guest's phone number is ${phoneNumber} — use it automatically, no need to ask.`;

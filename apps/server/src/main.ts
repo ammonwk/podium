@@ -24,14 +24,17 @@ import type { LaneContext } from './shared/sse.js';
 import { resetState } from './shared/state.js';
 import { cancelAll as cancelAllTasks } from './shared/scheduler.js';
 import { getProviderConfig, setProvider } from './shared/llm/client.js';
-import { runAgentLoop } from './agent/orchestrator.js';
-import { runChatLoop } from './agent/chat-orchestrator.js';
+import { runLoop } from './agent/orchestrator.js';
+import { createDashboardEmitter, createChatEmitter } from './agent/emitters.js';
 import { formatEvent, wrapUntrustedInput } from './agent/format-event.js';
 import { addChatClient, clearAllChatClients } from './shared/chat-sse.js';
 import { setHandleEventCallback } from './tools/schedule-task.js';
 import { laneManager, DEMO_LANE_ID } from './shared/lane-manager.js';
 import type { ConversationType } from './shared/lane-manager.js';
 import { getOwnerSettings, setOwnerSettings } from './shared/owner-settings.js';
+import { buildSystemPrompt } from './agent/system-prompt.js';
+import { ALL_TOOLS, CHAT_BOOKING_TOOLS, NO_TOOLS } from './tools/definitions.js';
+import { normalizePhone } from './shared/phone-utils.js';
 
 // ─── Express App ──────────────────────────────────────────────────────────────
 
@@ -61,7 +64,14 @@ async function handleEvent(event: IncomingEvent, laneId: string, laneType: Conve
   });
 
   // Run the agent loop
-  await runAgentLoop(lane.history, event.name, event.source, laneContext);
+  await runLoop(lane.history, {
+    label: `LANE:${laneId}`,
+    eventName: event.name,
+    maxIterations: AGENT_CONFIG.MAX_ITERATIONS,
+    tools: ALL_TOOLS,
+    systemPrompt: buildSystemPrompt(),
+    emitter: createDashboardEmitter(laneContext),
+  });
 }
 
 function enqueueEvent(event: IncomingEvent, laneId: string, laneType: ConversationType): void {
@@ -196,7 +206,7 @@ app.post('/surge/webhook', (req, res) => {
   };
 
   // Route to a per-phone-number lane for concurrent processing
-  enqueueEvent(event, payload.from, 'caller');
+  enqueueEvent(event, from, 'caller');
   res.json({ status: 'queued', event_name: event.name });
 });
 
@@ -240,8 +250,18 @@ app.post('/chat', (req, res) => {
   // Wrap user message in untrusted-input tags (same defense as SMS path)
   session.history.push({ role: 'user', content: wrapUntrustedInput(message) });
 
-  // Run chat loop in background (streaming via SSE)
-  runChatLoop(session.history, role, sessionId, { phoneNumber: session.phoneNumber }).catch((err) => {
+  // Run unified loop in background (streaming via SSE)
+  const normalizedPhone = session.phoneNumber ? normalizePhone(session.phoneNumber) : undefined;
+  const tools = role === 'interested_person' ? CHAT_BOOKING_TOOLS : NO_TOOLS;
+
+  runLoop(session.history, {
+    label: `CHAT:${sessionId}`,
+    eventName: `chat-${sessionId}`,
+    maxIterations: AGENT_CONFIG.CHAT_MAX_ITERATIONS,
+    tools,
+    systemPrompt: buildSystemPrompt(role, normalizedPhone || session.phoneNumber),
+    emitter: createChatEmitter(sessionId),
+  }).catch((err) => {
     console.error('[CHAT] Error:', err);
   });
 

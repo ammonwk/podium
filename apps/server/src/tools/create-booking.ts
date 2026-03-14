@@ -1,12 +1,14 @@
 import type { CreateBookingInput, CreateBookingResult } from '@apm/shared';
 import { PropertyModel, BookingModel, ScheduleEventModel } from '../shared/db.js';
+import { normalizePhone } from '../shared/phone-utils.js';
 
 let bookingCounter = 100;
 
 export async function executeCreateBooking(
   input: CreateBookingInput,
 ): Promise<CreateBookingResult> {
-  const { property_id, guest_name, guest_phone, check_in, check_out } = input;
+  const { property_id, guest_name, check_in, check_out } = input;
+  const guest_phone = normalizePhone(input.guest_phone) || input.guest_phone;
 
   // Validate property exists
   const property = await PropertyModel.findOne({ id: property_id }).lean();
