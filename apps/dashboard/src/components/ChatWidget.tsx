@@ -3,6 +3,15 @@ import { THEME } from '@apm/shared';
 import type { ChatRole, ChatMessage } from '@apm/shared';
 import { RADIUS, SHADOW, ANIMATION } from '../styles/theme';
 
+function formatBold(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*.*?\*\*)/g);
+  return parts.map((part, i) =>
+    part.startsWith('**') && part.endsWith('**')
+      ? <strong key={i}>{part.slice(2, -2)}</strong>
+      : part
+  );
+}
+
 const ROLES: { key: ChatRole; label: string }[] = [
   { key: 'property_owner', label: 'Owner' },
   { key: 'current_occupant', label: 'Occupant' },
@@ -194,7 +203,7 @@ export const ChatWidget: React.FC = () => {
                     ...(msg.role === 'user' ? styles.userBubble : styles.assistantBubble),
                   }}
                 >
-                  {msg.content || (isStreamingMsg(msg) ? '...' : '')}
+                  {msg.content ? formatBold(msg.content.replace(/^\n+/, '')) : (isStreamingMsg(msg) ? '...' : '')}
                 </div>
               </div>
             ))}
