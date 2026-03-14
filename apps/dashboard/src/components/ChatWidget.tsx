@@ -183,6 +183,7 @@ export const ChatWidget: React.FC = () => {
 
     es.addEventListener('chat_done', () => {
       setIsStreaming(false);
+      streamingTextRef.current = '';
       setMessages((prev) => {
         // Remove empty trailing streaming messages and finalize IDs
         const result: DisplayMessage[] = [];
