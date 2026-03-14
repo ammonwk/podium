@@ -340,7 +340,6 @@ case "$COMMAND" in
     echo ""
     ok "Full deployment complete!"
     echo "   https://$DOMAIN"
-    echo "   Password: (set in .env as AUTH_PASSWORD, default: 'secret demo password')"
     ;;
   *)
     usage
