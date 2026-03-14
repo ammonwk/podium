@@ -179,7 +179,7 @@ const WorkOrderActivity: React.FC<{ data: Record<string, unknown> }> = ({ data }
           ${cost.toLocaleString()}
           {' · '}
           <span style={{ color: severityColors[severity] || THEME.text.secondary, fontWeight: 600 }}>
-            {severity.charAt(0).toUpperCase() + severity.slice(1)}
+            {(severity ?? 'info').charAt(0).toUpperCase() + (severity ?? 'info').slice(1)}
           </span>
         </div>
       </div>

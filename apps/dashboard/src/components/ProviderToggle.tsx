@@ -8,6 +8,7 @@ interface Props {
 }
 
 function formatModel(model: string): string {
+  if (!model) return '';
   if (model.includes('claude')) {
     return model.replace(/-\d{8}$/, '').replace('claude-', 'Claude ');
   }
@@ -18,7 +19,7 @@ function formatModel(model: string): string {
 }
 
 function formatProvider(provider: string): string {
-  return provider.charAt(0).toUpperCase() + provider.slice(1);
+  return (provider ?? '').charAt(0).toUpperCase() + (provider ?? '').slice(1);
 }
 
 function ProviderIcon({ provider }: { provider: string }) {
@@ -45,6 +46,8 @@ function ProviderIcon({ provider }: { provider: string }) {
 }
 
 export const ProviderToggle: React.FC<Props> = ({ providerConfig, onSwitch }) => {
+  const provider = providerConfig?.provider ?? '';
+  const model = providerConfig?.model ?? '';
   const [hovered, setHovered] = useState(false);
   const textRef = useRef<HTMLSpanElement>(null);
   const [textWidth, setTextWidth] = useState(0);
@@ -74,7 +77,7 @@ export const ProviderToggle: React.FC<Props> = ({ providerConfig, onSwitch }) =>
         onClick={onSwitch}
         title="Click to switch provider"
       >
-        <ProviderIcon provider={providerConfig.provider} />
+        <ProviderIcon provider={provider} />
         <span
           style={{
             ...styles.textContainer,
@@ -83,9 +86,9 @@ export const ProviderToggle: React.FC<Props> = ({ providerConfig, onSwitch }) =>
           }}
         >
           <span ref={textRef} style={styles.textInner}>
-            <span style={styles.provider}>{formatProvider(providerConfig.provider)}</span>
+            <span style={styles.provider}>{formatProvider(provider)}</span>
             <span style={styles.separator}>·</span>
-            <span style={styles.model}>{formatModel(providerConfig.model)}</span>
+            <span style={styles.model}>{formatModel(model)}</span>
           </span>
         </span>
       </button>
