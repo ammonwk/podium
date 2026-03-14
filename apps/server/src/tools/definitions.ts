@@ -231,11 +231,11 @@ export const toolDefinitions: LLMToolDefinition[] = [
         },
         check_in: {
           type: 'string',
-          description: 'Check-in date/time in ISO 8601 format',
+          description: 'Check-in date in YYYY-MM-DD format. Platform enforces 3 PM check-in.',
         },
         check_out: {
           type: 'string',
-          description: 'Check-out date/time in ISO 8601 format',
+          description: 'Check-out date in YYYY-MM-DD format. Platform enforces 11 AM check-out.',
         },
       },
     },
@@ -258,11 +258,11 @@ export const toolDefinitions: LLMToolDefinition[] = [
         },
         new_check_in: {
           type: 'string',
-          description: 'New check-in date/time in ISO 8601 format',
+          description: 'New check-in date in YYYY-MM-DD format. Platform enforces 3 PM check-in.',
         },
         new_check_out: {
           type: 'string',
-          description: 'New check-out date/time in ISO 8601 format',
+          description: 'New check-out date in YYYY-MM-DD format. Platform enforces 11 AM check-out.',
         },
         new_property_id: {
           type: 'string',
@@ -302,12 +302,12 @@ export const toolDefinitions: LLMToolDefinition[] = [
         check_availability_start: {
           type: 'string',
           description:
-            'Start of date window to compute availability in ISO 8601 format. Defaults to today.',
+            'Start of date window to compute availability in YYYY-MM-DD format. Defaults to today.',
         },
         check_availability_end: {
           type: 'string',
           description:
-            'End of date window to compute availability in ISO 8601 format. Defaults to 30 days from today.',
+            'End of date window to compute availability in YYYY-MM-DD format. Defaults to 30 days from today.',
         },
       },
     },

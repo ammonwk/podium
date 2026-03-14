@@ -1,11 +1,14 @@
 import type { EditBookingInput, EditBookingResult } from '@apm/shared';
 import { PropertyModel, BookingModel, ScheduleEventModel } from '../shared/db.js';
 import { normalizePhone } from '../shared/phone-utils.js';
+import { normalizeCheckIn, normalizeCheckOut } from '../shared/booking-dates.js';
 
 export async function executeEditBooking(
   input: EditBookingInput,
 ): Promise<EditBookingResult> {
-  const { property_id, new_check_in, new_check_out, new_property_id } = input;
+  const { property_id, new_property_id } = input;
+  const new_check_in = input.new_check_in ? normalizeCheckIn(input.new_check_in) : undefined;
+  const new_check_out = input.new_check_out ? normalizeCheckOut(input.new_check_out) : undefined;
   const guest_phone = normalizePhone(input.guest_phone) || input.guest_phone;
 
   // Find booking(s) by phone

@@ -274,6 +274,15 @@ export const DEMO_EVENTS = [
 
 // ─── Agent Config ────────────────────────────────────────────────────────────
 
+// ─── Booking Times ──────────────────────────────────────────────────────────
+
+export const BOOKING_TIMES = {
+  CHECK_IN_HOUR: 15,   // 3 PM
+  CHECK_OUT_HOUR: 11,  // 11 AM
+} as const;
+
+// ─── Agent Config ────────────────────────────────────────────────────────────
+
 export const AGENT_CONFIG = {
   MAX_ITERATIONS: 10,
   CHAT_MAX_ITERATIONS: 5,

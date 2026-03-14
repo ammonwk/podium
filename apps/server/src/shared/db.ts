@@ -8,7 +8,7 @@ import type {
   Decision,
   ScheduledTask,
 } from '@apm/shared';
-import { PROPERTY_IDS, VENDOR_IDS, PHONE_NUMBERS } from '@apm/shared';
+import { PROPERTY_IDS, VENDOR_IDS, PHONE_NUMBERS, BOOKING_TIMES } from '@apm/shared';
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -222,8 +222,8 @@ export async function seed(): Promise<void> {
       property_id: PROPERTY_IDS.OCEANVIEW_COTTAGE,
       guest_name: 'Sarah Chen',
       guest_phone: PHONE_NUMBERS.SARAH_CHEN,
-      check_in: timeStr(threeDaysAgo, 15),
-      check_out: timeStr(tomorrow, 11),
+      check_in: timeStr(threeDaysAgo, BOOKING_TIMES.CHECK_IN_HOUR),
+      check_out: timeStr(tomorrow, BOOKING_TIMES.CHECK_OUT_HOUR),
       status: 'active',
     },
     {
@@ -231,8 +231,8 @@ export async function seed(): Promise<void> {
       property_id: PROPERTY_IDS.MOUNTAIN_LOFT,
       guest_name: 'James Wright',
       guest_phone: PHONE_NUMBERS.JAMES_WRIGHT,
-      check_in: timeStr(threeDaysAgo, 15),
-      check_out: timeStr(tomorrow, 10),
+      check_in: timeStr(threeDaysAgo, BOOKING_TIMES.CHECK_IN_HOUR),
+      check_out: timeStr(tomorrow, BOOKING_TIMES.CHECK_OUT_HOUR),
       status: 'active',
     },
     {
@@ -240,8 +240,8 @@ export async function seed(): Promise<void> {
       property_id: PROPERTY_IDS.CANYON_HOUSE,
       guest_name: 'Lisa Kim',
       guest_phone: PHONE_NUMBERS.LISA_KIM,
-      check_in: timeStr(today, 15),
-      check_out: timeStr(threeDaysFromNow, 11),
+      check_in: timeStr(today, BOOKING_TIMES.CHECK_IN_HOUR),
+      check_out: timeStr(threeDaysFromNow, BOOKING_TIMES.CHECK_OUT_HOUR),
       status: 'active',
     },
     {
@@ -249,8 +249,8 @@ export async function seed(): Promise<void> {
       property_id: PROPERTY_IDS.OCEANVIEW_COTTAGE,
       guest_name: 'Mike Torres',
       guest_phone: PHONE_NUMBERS.MIKE_TORRES,
-      check_in: timeStr(tomorrow, 15),
-      check_out: timeStr(sixDaysFromNow, 11),
+      check_in: timeStr(tomorrow, BOOKING_TIMES.CHECK_IN_HOUR),
+      check_out: timeStr(sixDaysFromNow, BOOKING_TIMES.CHECK_OUT_HOUR),
       status: 'upcoming',
     },
     {
@@ -258,8 +258,8 @@ export async function seed(): Promise<void> {
       property_id: PROPERTY_IDS.MOUNTAIN_LOFT,
       guest_name: 'Anna Park',
       guest_phone: PHONE_NUMBERS.ANNA_PARK,
-      check_in: timeStr(tomorrow, 15),
-      check_out: timeStr(sixDaysFromNow, 11),
+      check_in: timeStr(tomorrow, BOOKING_TIMES.CHECK_IN_HOUR),
+      check_out: timeStr(sixDaysFromNow, BOOKING_TIMES.CHECK_OUT_HOUR),
       status: 'upcoming',
     },
   ]);
@@ -270,44 +270,44 @@ export async function seed(): Promise<void> {
     {
       property_id: PROPERTY_IDS.OCEANVIEW_COTTAGE,
       event_type: 'checkout',
-      start_time: timeStr(tomorrow, 11),
-      end_time: timeStr(tomorrow, 11),
+      start_time: timeStr(tomorrow, BOOKING_TIMES.CHECK_OUT_HOUR),
+      end_time: timeStr(tomorrow, BOOKING_TIMES.CHECK_OUT_HOUR),
       notes: 'Sarah Chen checkout',
     },
     {
       property_id: PROPERTY_IDS.OCEANVIEW_COTTAGE,
       event_type: 'cleaning',
-      start_time: timeStr(tomorrow, 11),
+      start_time: timeStr(tomorrow, BOOKING_TIMES.CHECK_OUT_HOUR),
       end_time: timeStr(tomorrow, 13),
       notes: 'Turnover cleaning — crew arrives after PROP_002',
     },
     {
       property_id: PROPERTY_IDS.OCEANVIEW_COTTAGE,
       event_type: 'checkin',
-      start_time: timeStr(tomorrow, 15),
-      end_time: timeStr(tomorrow, 15),
+      start_time: timeStr(tomorrow, BOOKING_TIMES.CHECK_IN_HOUR),
+      end_time: timeStr(tomorrow, BOOKING_TIMES.CHECK_IN_HOUR),
       notes: 'Mike Torres check-in',
     },
     // PROP_002 — Mountain Loft
     {
       property_id: PROPERTY_IDS.MOUNTAIN_LOFT,
       event_type: 'checkout',
-      start_time: timeStr(tomorrow, 10),
-      end_time: timeStr(tomorrow, 10),
+      start_time: timeStr(tomorrow, BOOKING_TIMES.CHECK_OUT_HOUR),
+      end_time: timeStr(tomorrow, BOOKING_TIMES.CHECK_OUT_HOUR),
       notes: 'James Wright checkout',
     },
     {
       property_id: PROPERTY_IDS.MOUNTAIN_LOFT,
       event_type: 'cleaning',
-      start_time: timeStr(tomorrow, 10),
-      end_time: timeStr(tomorrow, 12),
+      start_time: timeStr(tomorrow, BOOKING_TIMES.CHECK_OUT_HOUR),
+      end_time: timeStr(tomorrow, 13),
       notes: 'Turnover cleaning — crew does PROP_002 first, then drives to PROP_001',
     },
     {
       property_id: PROPERTY_IDS.MOUNTAIN_LOFT,
       event_type: 'checkin',
-      start_time: timeStr(tomorrow, 15),
-      end_time: timeStr(tomorrow, 15),
+      start_time: timeStr(tomorrow, BOOKING_TIMES.CHECK_IN_HOUR),
+      end_time: timeStr(tomorrow, BOOKING_TIMES.CHECK_IN_HOUR),
       notes: 'Anna Park check-in',
     },
   ]);
