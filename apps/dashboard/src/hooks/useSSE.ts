@@ -592,10 +592,9 @@ export function useSSE(): DashboardState & {
       });
       if (resp.ok) {
         const data = await resp.json();
-        const config = data.provider || data;
         setState(prev => ({
           ...prev,
-          providerConfig: { provider: config.provider, model: config.model },
+          providerConfig: { provider: data.provider, model: data.model },
         }));
       }
     } catch (err) {
