@@ -7,16 +7,18 @@ import type {
 } from '@apm/shared';
 import { convertMessages, convertTools } from './openai-format.js';
 
-export class CerebrasClient implements LLMClient {
+export class OpenRouterClient implements LLMClient {
   private client: OpenAI;
-  public readonly provider = 'cerebras';
+  public readonly provider = 'openrouter';
   public readonly model: string;
+  private providerOrder?: string[];
 
-  constructor(model: string) {
+  constructor(model: string, providerOrder?: string[]) {
     this.model = model;
+    this.providerOrder = providerOrder;
     this.client = new OpenAI({
-      baseURL: 'https://api.cerebras.ai/v1',
-      apiKey: process.env.CEREBRAS_API_KEY,
+      baseURL: 'https://openrouter.ai/api/v1',
+      apiKey: process.env.OPENROUTER_API_KEY,
     });
   }
 
@@ -28,14 +30,21 @@ export class CerebrasClient implements LLMClient {
     const openaiMessages = convertMessages(system, messages);
     const openaiTools = convertTools(tools);
 
-    const stream = await this.client.chat.completions.create({
+    const params: OpenAI.ChatCompletionCreateParamsStreaming = {
       model: this.model,
       messages: openaiMessages,
-      tools: openaiTools,
       stream: true,
-    });
+      ...(openaiTools.length > 0 ? { tools: openaiTools } : {}),
+    };
+    // OpenRouter-specific: route through a preferred provider
+    if (this.providerOrder) {
+      (params as unknown as Record<string, unknown>).provider = {
+        order: this.providerOrder,
+      };
+    }
 
-    // Track tool calls being assembled from streamed deltas
+    const stream = await this.client.chat.completions.create(params);
+
     const activeToolCalls = new Map<
       number,
       { id: string; name: string; argumentsJson: string }
@@ -54,7 +63,6 @@ export class CerebrasClient implements LLMClient {
       if (delta?.tool_calls) {
         for (const tc of delta.tool_calls) {
           if (tc.id) {
-            // New tool call starting
             activeToolCalls.set(tc.index, {
               id: tc.id,
               name: tc.function?.name || '',
@@ -69,7 +77,6 @@ export class CerebrasClient implements LLMClient {
               },
             };
           } else {
-            // Continuing existing tool call — append arguments
             const existing = activeToolCalls.get(tc.index);
             if (existing && tc.function?.arguments) {
               existing.argumentsJson += tc.function.arguments;
@@ -79,14 +86,13 @@ export class CerebrasClient implements LLMClient {
       }
 
       if (choice.finish_reason) {
-        // Emit all completed tool calls
         for (const [, tc] of activeToolCalls) {
           let input: Record<string, unknown> = {};
           try {
             input = tc.argumentsJson ? JSON.parse(tc.argumentsJson) : {};
           } catch {
             console.error(
-              `[CEREBRAS] Failed to parse tool arguments: ${tc.argumentsJson}`,
+              `[OPENROUTER] Failed to parse tool arguments: ${tc.argumentsJson}`,
             );
           }
           yield {

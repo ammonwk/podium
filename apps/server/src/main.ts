@@ -26,7 +26,7 @@ import { cancelAll as cancelAllTasks } from './shared/scheduler.js';
 import { getProviderConfig, setProvider } from './shared/llm/client.js';
 import { runAgentLoop } from './agent/orchestrator.js';
 import { runChatLoop } from './agent/chat-orchestrator.js';
-import { formatEvent } from './agent/format-event.js';
+import { formatEvent, wrapUntrustedInput } from './agent/format-event.js';
 import { addChatClient, clearAllChatClients } from './shared/chat-sse.js';
 import { setHandleEventCallback } from './tools/schedule-task.js';
 import { laneManager, DEMO_LANE_ID } from './shared/lane-manager.js';
@@ -237,8 +237,8 @@ app.post('/chat', (req, res) => {
     session.phoneNumber = phoneNumber;
   }
 
-  // Push user message
-  session.history.push({ role: 'user', content: message });
+  // Wrap user message in untrusted-input tags (same defense as SMS path)
+  session.history.push({ role: 'user', content: wrapUntrustedInput(message) });
 
   // Run chat loop in background (streaming via SSE)
   runChatLoop(session.history, role, sessionId, { phoneNumber: session.phoneNumber }).catch((err) => {

@@ -327,6 +327,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     overflow: 'hidden',
     padding: '0 24px',
+    marginTop: '24px',
   },
 
   // Error
