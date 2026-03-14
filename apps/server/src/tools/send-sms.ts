@@ -1,16 +1,15 @@
 import type { SendSmsInput, SendSmsResult } from '@apm/shared';
 import { PHONE_NUMBERS } from '@apm/shared';
 import { BookingModel, VendorModel } from '../shared/db.js';
-
-// Build a lookup for all known phone numbers
-const OWNER_PHONE = PHONE_NUMBERS.OWNER_DAVID;
+import { getOwnerSettings } from '../shared/owner-settings.js';
 
 async function resolveRecipient(
   phone: string,
 ): Promise<{ name: string; type: 'guest' | 'vendor' | 'owner' } | null> {
   // Check owner
-  if (phone === OWNER_PHONE) {
-    return { name: 'David Reyes (Owner)', type: 'owner' };
+  const owner = getOwnerSettings();
+  if (phone === owner.phone) {
+    return { name: `${owner.name} (Owner)`, type: 'owner' };
   }
 
   // Check active/upcoming bookings
