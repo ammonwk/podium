@@ -20,11 +20,8 @@ import type { IncomingEvent, DemoEvent, SurgeWebhookPayload, ChatRequest, LLMMes
 import { AGENT_CONFIG, PROVIDERS } from '@apm/shared';
 import { connectDB, seed } from './shared/db.js';
 import { addClient, emitSSE } from './shared/sse.js';
-import {
-  conversationHistory,
-  resetState,
-  getConversationHistory,
-} from './shared/state.js';
+import type { LaneContext } from './shared/sse.js';
+import { resetState } from './shared/state.js';
 import { cancelAll as cancelAllTasks } from './shared/scheduler.js';
 import { getProviderConfig, setProvider } from './shared/llm/client.js';
 import { runAgentLoop } from './agent/orchestrator.js';
@@ -32,6 +29,9 @@ import { runChatLoop } from './agent/chat-orchestrator.js';
 import { formatEvent } from './agent/format-event.js';
 import { addChatClient, clearAllChatClients } from './shared/chat-sse.js';
 import { setHandleEventCallback } from './tools/schedule-task.js';
+import { laneManager, DEMO_LANE_ID } from './shared/lane-manager.js';
+import type { ConversationType } from './shared/lane-manager.js';
+import { getOwnerSettings, setOwnerSettings } from './shared/owner-settings.js';
 
 // ─── Express App ──────────────────────────────────────────────────────────────
 
@@ -41,63 +41,59 @@ app.use(express.json());
 
 const PORT = parseInt(process.env.PORT || '8000', 10);
 
-// ─── Event Queue (promise-chain serialization) ──────────────────────────────
+// ─── Lane-Based Event Handling ───────────────────────────────────────────────
 
-let eventQueue: Promise<void> = Promise.resolve();
-let queueDepth = 0;
-
-async function handleEvent(event: IncomingEvent): Promise<void> {
-  const history = getConversationHistory();
+async function handleEvent(event: IncomingEvent, laneId: string, laneType: ConversationType): Promise<void> {
+  const lane = laneManager.getOrCreate(laneId, laneType);
+  const laneContext: LaneContext = { conversation_id: laneId, conversation_type: laneType };
 
   // Format the event into a user message
   const formattedMessage = await formatEvent(event);
 
   console.log(
-    `[QUEUE] Processing event: "${event.name}" (source: ${event.source})`,
+    `[LANE:${laneId}] Processing event: "${event.name}" (source: ${event.source})`,
   );
 
-  // Push user message to conversation history
-  history.push({
+  // Push user message to lane's history
+  lane.history.push({
     role: 'user',
     content: formattedMessage,
   });
 
   // Run the agent loop
-  await runAgentLoop(history, event.name, event.source);
+  await runAgentLoop(lane.history, event.name, event.source, laneContext);
 }
 
-function enqueueEvent(event: IncomingEvent): void {
-  queueDepth++;
-  const position = queueDepth;
+function enqueueEvent(event: IncomingEvent, laneId: string, laneType: ConversationType): void {
+  const laneContext: LaneContext = { conversation_id: laneId, conversation_type: laneType };
 
   // Emit queued event immediately so dashboard can show it
   emitSSE('event_queued', {
     event_name: event.name,
     source: event.source,
-    position,
-  });
+  }, laneContext);
 
   console.log(
-    `[QUEUE] Event queued: "${event.name}" (position: ${position})`,
+    `[LANE:${laneId}] Event queued: "${event.name}"`,
   );
 
-  // Chain onto the promise queue — never run two handleEvent() concurrently
-  eventQueue = eventQueue
-    .then(() => handleEvent(event))
-    .catch((err) => {
-      console.error(`[QUEUE] Error processing event "${event.name}":`, err);
+  // Chain onto this lane's queue — events in the same lane run serially,
+  // but different lanes run concurrently
+  laneManager.enqueue(laneId, laneType, async () => {
+    try {
+      await handleEvent(event, laneId, laneType);
+    } catch (err: any) {
+      console.error(`[LANE:${laneId}] Error processing event "${event.name}":`, err);
       emitSSE('error', {
         message: `Error processing "${event.name}": ${err.message || 'Unknown error'}`,
-      });
-    })
-    .finally(() => {
-      queueDepth--;
-    });
+      }, laneContext);
+    }
+  });
 }
 
 // Register the callback for scheduled tasks (avoids circular imports)
 setHandleEventCallback((event) => {
-  enqueueEvent(event);
+  enqueueEvent(event, DEMO_LANE_ID, 'demo');
 });
 
 // ─── Chat Sessions ──────────────────────────────────────────────────────────
@@ -161,7 +157,7 @@ app.post('/events', (req, res) => {
     return;
   }
 
-  enqueueEvent(event);
+  enqueueEvent(event, DEMO_LANE_ID, 'demo');
   res.json({ status: 'queued', event_name: event.name });
 });
 
@@ -199,7 +195,8 @@ app.post('/surge/webhook', (req, res) => {
     },
   };
 
-  enqueueEvent(event);
+  // Route to a per-phone-number lane for concurrent processing
+  enqueueEvent(event, payload.from, 'caller');
   res.json({ status: 'queued', event_name: event.name });
 });
 
@@ -276,7 +273,7 @@ app.post('/reset', async (_req, res) => {
     // Cancel all pending tasks
     cancelAllTasks();
 
-    // Reset conversation history
+    // Reset all conversation lanes
     resetState();
 
     // Clear SMS rate limiter
@@ -285,10 +282,6 @@ app.post('/reset', async (_req, res) => {
     // Clear chat sessions
     chatSessions.clear();
     clearAllChatClients();
-
-    // Reset queue
-    eventQueue = Promise.resolve();
-    queueDepth = 0;
 
     // Re-seed database
     await seed();
@@ -302,6 +295,29 @@ app.post('/reset', async (_req, res) => {
     console.error('[RESET] Error:', err);
     res.status(500).json({ error: err.message || 'Reset failed' });
   }
+});
+
+// GET /settings/owner
+app.get('/settings/owner', (_req, res) => {
+  res.json(getOwnerSettings());
+});
+
+// PUT /settings/owner
+app.put('/settings/owner', (req, res) => {
+  const { name, phone } = req.body || {};
+
+  if (!name || !phone) {
+    res.status(400).json({ error: 'Missing name or phone' });
+    return;
+  }
+
+  if (!/^\+\d{7,15}$/.test(phone)) {
+    res.status(400).json({ error: 'Invalid phone format. Use E.164 (e.g. +18015550000)' });
+    return;
+  }
+
+  setOwnerSettings(name, phone);
+  res.json({ status: 'ok', ...getOwnerSettings() });
 });
 
 // GET /health

@@ -2,6 +2,7 @@ import type { LLMMessage, LLMContentBlock, LLMStreamEvent } from '@apm/shared';
 import { AGENT_CONFIG, TOOL_NAMES } from '@apm/shared';
 import { getActiveClient } from '../shared/llm/client.js';
 import { emitSSE } from '../shared/sse.js';
+import type { LaneContext } from '../shared/sse.js';
 import { buildSystemPrompt } from './system-prompt.js';
 import { toolDefinitions } from '../tools/definitions.js';
 import { executeSendSms } from '../tools/send-sms.js';
@@ -76,6 +77,7 @@ export async function runAgentLoop(
   conversationHistory: LLMMessage[],
   eventName: string,
   source: 'human' | 'system' | 'self-scheduled',
+  laneContext?: LaneContext,
 ): Promise<void> {
   const client = getActiveClient();
   const system = buildSystemPrompt();
@@ -88,7 +90,7 @@ export async function runAgentLoop(
     event_name: eventName,
     source,
     description: `Processing: ${eventName}`,
-  });
+  }, laneContext);
 
   let iteration = 0;
 
@@ -110,7 +112,7 @@ export async function runAgentLoop(
           case 'thinking_delta': {
             // Stream thinking text to dashboard for live display
             const thinkingText = event.text || '';
-            emitSSE('thinking', { text: thinkingText, event_name: eventName });
+            emitSSE('thinking', { text: thinkingText, event_name: eventName }, laneContext);
             break;
           }
           case 'thinking_done': {
@@ -128,7 +130,7 @@ export async function runAgentLoop(
             const text = event.text || '';
             fullText += text;
             // Emit text to dashboard as well
-            emitSSE('thinking', { text, event_name: eventName });
+            emitSSE('thinking', { text, event_name: eventName }, laneContext);
             break;
           }
           case 'tool_use_start': {
@@ -155,7 +157,7 @@ export async function runAgentLoop(
       console.error('[AGENT] LLM stream error:', err);
       emitSSE('error', {
         message: `LLM error: ${err.message || 'Unknown error'}`,
-      });
+      }, laneContext);
       break;
     }
 
@@ -212,7 +214,7 @@ export async function runAgentLoop(
         input: tc.input,
         result,
         event_name: eventName,
-      });
+      }, laneContext);
 
       toolResultBlocks.push({
         type: 'tool_result',
@@ -239,6 +241,6 @@ export async function runAgentLoop(
     );
   }
 
-  emitSSE('event_done', { event_name: eventName });
+  emitSSE('event_done', { event_name: eventName }, laneContext);
   console.log(`[AGENT] Loop complete for "${eventName}" (${iteration} iterations)`);
 }
