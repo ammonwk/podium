@@ -73,6 +73,7 @@ export const SSE_EVENTS = {
   EVENT_DONE: 'event_done',
   SCHEDULED_TASK: 'scheduled_task',
   EVENT_QUEUED: 'event_queued',
+  ISSUE_RESOLVED: 'issue_resolved',
   ERROR: 'error',
   RESET: 'reset',
 } as const;
@@ -90,7 +91,7 @@ export const PROVIDERS = {
   },
 };
 
-export const DEFAULT_PROVIDER = PROVIDERS.ANTHROPIC;
+export const DEFAULT_PROVIDER = PROVIDERS.CEREBRAS;
 
 // ─── Tool Card Colors (for dashboard) ────────────────────────────────────────
 

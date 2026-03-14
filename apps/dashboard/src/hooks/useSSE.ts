@@ -216,7 +216,7 @@ function createInitialState(): DashboardState {
         const saved = localStorage.getItem("providerConfig");
         if (saved) return JSON.parse(saved);
       } catch {}
-      return { provider: "anthropic", model: "claude-opus-4-6" };
+      return { provider: "cerebras", model: "gpt-oss-120b" };
     })(),
     demoEventIndex: 0,
   };
@@ -617,6 +617,22 @@ function applySSEEvent(
       };
     }
 
+    case SSE_EVENTS.ISSUE_RESOLVED: {
+      const p = payload as unknown as { property_id: string; issue_description: string };
+      return {
+        ...prev,
+        properties: prev.properties.map(prop => {
+          if (prop.id !== p.property_id) return prop;
+          const activeIssues = prop.activeIssues.filter(issue => issue !== p.issue_description);
+          return {
+            ...prop,
+            activeIssues,
+            status: activeIssues.length === 0 ? 'normal' : prop.status,
+          };
+        }),
+      };
+    }
+
     case SSE_EVENTS.RESET: {
       return createInitialState();
     }
@@ -775,6 +791,7 @@ export function useSSE(): DashboardState & {
       SSE_EVENTS.THINKING,
       SSE_EVENTS.TOOL_CALL,
       SSE_EVENTS.SCHEDULED_TASK,
+      SSE_EVENTS.ISSUE_RESOLVED,
       SSE_EVENTS.RESET,
       SSE_EVENTS.ERROR,
     ];
@@ -933,18 +950,32 @@ export function useSSE(): DashboardState & {
   }, []);
 
   const resolveIssue = useCallback((propertyId: string, issueIndex: number) => {
-    setState(prev => ({
-      ...prev,
-      properties: prev.properties.map(p => {
-        if (p.id !== propertyId) return p;
-        const activeIssues = p.activeIssues.filter((_, i) => i !== issueIndex);
-        return {
-          ...p,
-          activeIssues,
-          status: activeIssues.length === 0 ? 'normal' : p.status,
-        };
-      }),
-    }));
+    setState(prev => {
+      const property = prev.properties.find(p => p.id === propertyId);
+      const issueDescription = property?.activeIssues[issueIndex];
+
+      // Fire API call to persist in DB (fire-and-forget)
+      if (issueDescription) {
+        fetch(`${getServerUrl()}/api/work-orders/resolve`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ property_id: propertyId, issue_description: issueDescription }),
+        }).catch(err => console.error('Failed to resolve issue:', err));
+      }
+
+      return {
+        ...prev,
+        properties: prev.properties.map(p => {
+          if (p.id !== propertyId) return p;
+          const activeIssues = p.activeIssues.filter((_, i) => i !== issueIndex);
+          return {
+            ...p,
+            activeIssues,
+            status: activeIssues.length === 0 ? 'normal' : p.status,
+          };
+        }),
+      };
+    });
   }, []);
 
   return {

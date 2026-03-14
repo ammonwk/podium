@@ -88,6 +88,9 @@ export async function runLoop(
     } catch (err: any) {
       console.error(`[${context.label}] LLM stream error:`, err);
       context.emitter.onError(`LLM error: ${err.message || 'Unknown error'}`);
+      // Don't push partial assistant message to history — it may contain
+      // tool_use blocks without matching tool_results, which corrupts the
+      // conversation for all future LLM calls in this lane.
       break;
     }
 
