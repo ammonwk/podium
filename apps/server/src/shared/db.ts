@@ -25,6 +25,7 @@ const propertySchema = new Schema<Property>({
   wifi_password: { type: String, required: true },
   door_code: { type: String, required: true },
   parking_info: { type: String, required: true },
+  zip_code: { type: String, required: true },
 });
 
 const bookingSchema = new Schema<Booking>({
@@ -172,6 +173,7 @@ export async function seed(): Promise<void> {
       wifi_password: 'paradise2024',
       door_code: '4829',
       parking_info: 'driveway, 2 spots',
+      zip_code: '84060',
     },
     {
       id: PROPERTY_IDS.MOUNTAIN_LOFT,
@@ -186,6 +188,7 @@ export async function seed(): Promise<void> {
       wifi_password: 'alpine2024',
       door_code: '7156',
       parking_info: 'street parking, permit provided at check-in',
+      zip_code: '84098',
     },
     {
       id: PROPERTY_IDS.CANYON_HOUSE,
@@ -200,6 +203,7 @@ export async function seed(): Promise<void> {
       wifi_password: 'redrock2024',
       door_code: '3391',
       parking_info: 'private lot, 3 spots',
+      zip_code: '84532',
     },
   ]);
 
