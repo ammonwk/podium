@@ -54,6 +54,11 @@ const scheduleEventSchema = new Schema<ScheduleEvent>({
   notes: { type: String },
 });
 
+const vendorAvailabilityWindowSchema = new Schema(
+  { day: { type: Number, required: true }, start_hour: { type: Number, required: true }, end_hour: { type: Number, required: true } },
+  { _id: false },
+);
+
 const vendorSchema = new Schema<Vendor>({
   id: { type: String, required: true, unique: true },
   name: { type: String, required: true },
@@ -61,6 +66,7 @@ const vendorSchema = new Schema<Vendor>({
   rating: { type: Number, required: true },
   hourly_rate: { type: Number, required: true },
   status: { type: String, enum: ['available', 'busy', 'on_call'], required: true },
+  schedule: { type: [vendorAvailabilityWindowSchema], required: true },
 });
 
 const workOrderSchema = new Schema<WorkOrder>({
@@ -396,6 +402,14 @@ export async function seed(): Promise<void> {
   ]);
 
   // ── Vendors ───────────────────────────────────────────────────────────────
+  // Schedule helpers
+  const weekdays = (start: number, end: number) =>
+    [1, 2, 3, 4, 5].map((day) => ({ day, start_hour: start, end_hour: end }));
+  const weekends = (start: number, end: number) =>
+    [0, 6].map((day) => ({ day, start_hour: start, end_hour: end }));
+  const allDays = (start: number, end: number) =>
+    [0, 1, 2, 3, 4, 5, 6].map((day) => ({ day, start_hour: start, end_hour: end }));
+
   await VendorModel.insertMany([
     {
       id: VENDOR_IDS.MIKES_PLUMBING,
@@ -404,14 +418,16 @@ export async function seed(): Promise<void> {
       rating: 4.8,
       hourly_rate: 95,
       status: 'available',
+      schedule: weekdays(8, 17),
     },
     {
       id: VENDOR_IDS.JOES_PLUMBING,
       name: "Joe's Plumbing",
       specialty: 'plumbing',
       rating: 4.2,
-      hourly_rate: 75,
-      status: 'busy',
+      hourly_rate: 120,
+      status: 'on_call',
+      schedule: allDays(0, 24),
     },
     {
       id: VENDOR_IDS.BRIGHT_ELECTRICAL,
@@ -420,14 +436,34 @@ export async function seed(): Promise<void> {
       rating: 4.7,
       hourly_rate: 110,
       status: 'available',
+      schedule: weekdays(7, 18),
+    },
+    {
+      id: VENDOR_IDS.SPARKS_ELECTRIC,
+      name: 'Sparks Electric',
+      specialty: 'electrical',
+      rating: 4.3,
+      hourly_rate: 90,
+      status: 'available',
+      schedule: weekends(9, 17),
     },
     {
       id: VENDOR_IDS.SPOTLESS_CLEANING,
-      name: 'Spotless Cleaning Co',
+      name: 'Spotless Cleaning',
       specialty: 'cleaning',
       rating: 4.9,
       hourly_rate: 45,
       status: 'available',
+      schedule: weekdays(8, 16),
+    },
+    {
+      id: VENDOR_IDS.FRESH_START_CLEANING,
+      name: 'Fresh Start Cleaning',
+      specialty: 'cleaning',
+      rating: 4.4,
+      hourly_rate: 55,
+      status: 'available',
+      schedule: allDays(6, 22),
     },
     {
       id: VENDOR_IDS.ALLFIX_MAINTENANCE,
@@ -436,6 +472,16 @@ export async function seed(): Promise<void> {
       rating: 4.5,
       hourly_rate: 85,
       status: 'available',
+      schedule: weekdays(8, 17),
+    },
+    {
+      id: VENDOR_IDS.HANDY_PROS,
+      name: 'Handy Pros',
+      specialty: 'general',
+      rating: 4.1,
+      hourly_rate: 70,
+      status: 'available',
+      schedule: weekends(10, 16),
     },
     {
       id: VENDOR_IDS.PEAK_HVAC,
@@ -443,7 +489,17 @@ export async function seed(): Promise<void> {
       specialty: 'hvac',
       rating: 4.6,
       hourly_rate: 125,
+      status: 'available',
+      schedule: weekdays(8, 17),
+    },
+    {
+      id: VENDOR_IDS.SUMMIT_HVAC,
+      name: 'Summit HVAC',
+      specialty: 'hvac',
+      rating: 4.3,
+      hourly_rate: 150,
       status: 'on_call',
+      schedule: allDays(0, 24),
     },
   ]);
 

@@ -350,6 +350,30 @@ export const toolDefinitions: LLMToolDefinition[] = [
     },
   },
   {
+    name: 'escalate_to_owner',
+    description:
+      'Escalate a non-maintenance emergency or urgent situation to the property owner via SMS. Use for safety hazards (fire, gas leak, intruder), guest distress, or situations requiring immediate owner intervention that are not maintenance issues.',
+    input_schema: {
+      type: 'object',
+      required: ['summary', 'severity'],
+      properties: {
+        summary: {
+          type: 'string',
+          description: 'AI-written description of the emergency or urgent situation',
+        },
+        severity: {
+          type: 'string',
+          enum: ['high', 'emergency'],
+          description: 'Severity level: high (urgent owner attention needed) or emergency (immediate safety concern)',
+        },
+        property_id: {
+          type: 'string',
+          description: 'Property ID if the situation is at a specific property (e.g., PROP_001)',
+        },
+      },
+    },
+  },
+  {
     name: 'report_maintenance_issue',
     description:
       'Report a maintenance issue at a property on behalf of a guest. Creates a work order and automatically finds and dispatches the best available vendor. Returns a pending status immediately — the vendor matching happens in the background and the guest will be updated via chat.',
@@ -396,7 +420,7 @@ export const CHAT_OWNER_TOOLS: LLMToolDefinition[] = toolDefinitions.filter((t) 
 );
 
 export const CHAT_OCCUPANT_TOOLS: LLMToolDefinition[] = toolDefinitions.filter((t) =>
-  [TOOL_NAMES.REPORT_MAINTENANCE_ISSUE, TOOL_NAMES.LOOKUP_GUEST].includes(t.name as any),
+  [TOOL_NAMES.REPORT_MAINTENANCE_ISSUE, TOOL_NAMES.LOOKUP_GUEST, TOOL_NAMES.ESCALATE_TO_OWNER].includes(t.name as any),
 );
 
 export const NO_TOOLS: LLMToolDefinition[] = [];

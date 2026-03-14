@@ -23,6 +23,13 @@ export async function runLoop(
 
   context.emitter.onStart(context.eventName, context.label);
 
+  // Deduplication for mutating (write) tool calls across iterations
+  const MUTATING_TOOLS = new Set([
+    'create_booking', 'edit_booking', 'create_work_order',
+    'send_sms', 'adjust_price', 'report_maintenance_issue',
+  ]);
+  const executedMutatingCalls = new Set<string>();
+
   let iteration = 0;
 
   while (iteration < context.maxIterations) {
